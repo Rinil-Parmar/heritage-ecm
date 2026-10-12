@@ -1,0 +1,40 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+
+# Dependencies and builds
+node_modules/
+dist/
+build/
+target/
+.gradle/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Local runtime data and generated output
+/data/
+/backups/
+/uploads/
+/tmp/
+/output/
+**/volumes/
+*.log
+coverage/
+.pytest_cache/
+
+# Editor and operating-system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
