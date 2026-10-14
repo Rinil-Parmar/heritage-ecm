@@ -6,8 +6,10 @@ COMP 8977 Internship/Project-2, Team 05, University of Windsor, Fall 2026.
 
 ## Project status
 
-Repository foundation established. ECM platform evaluation and deployment are next.
-There is no running application or configured ECM environment yet.
+Repository foundation established. Mayan EDMS is selected for the proof of
+concept, with a resource-limited local configuration in
+[infra/mayan](infra/mayan/README.md). The earlier Alfresco experiment is retained
+as evaluation history and is not the active platform.
 
 ## Purpose
 
@@ -32,10 +34,10 @@ extensions after the core workflow is complete.
 
 ## Technical direction
 
-Use an existing open-source ECM as the content system of record. Alfresco
-Community is the first candidate; Mayan EDMS is the alternative. Selection is
-pending a small proof of concept. React and a Spring Boot integration service
-are proposed only where a custom research interface needs them.
+Use Mayan EDMS as the document system of record. React and a Spring Boot service
+will provide the archaeological research interface and domain model where Mayan's
+document-oriented model is insufficient. The local proof of concept must confirm
+the platform's resource usage and API fit.
 
 Access ECM content through supported APIs. Avoid direct writes to its database
 and duplicated document storage in a separate application.
@@ -46,7 +48,7 @@ and duplicated document storage in a separate application.
 heritage-ecm/
   .github/       Issue and pull request templates
   docs/          Requirements, evaluation, decisions, and setup guidance
-  infra/         Future ECM deployment and configuration
+  infra/         ECM deployment and configuration
   scripts/       Future repeatable setup and maintenance tools
   samples/       Synthetic or appropriately licensed demonstration data
 ```
@@ -63,8 +65,8 @@ are not required to clone or use this repository.
    [platform evaluation plan](docs/platform-evaluation.md).
 4. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for branches and pull requests.
 
-Runtime commands and pinned versions will be documented after platform
-evaluation. No application build or test command exists at this stage.
+See the [local Mayan guide](infra/mayan/README.md) for container versions and
+runtime commands. No custom application build exists at this stage.
 
 ## Milestones
 

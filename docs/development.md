@@ -2,9 +2,11 @@
 
 ## Current stage
 
-This repository currently contains project documentation and collaboration
-templates. Git and a text editor are sufficient to work on this foundation.
-There is no Docker Compose file, application server, or executable test suite yet.
+This repository contains project documentation, collaboration templates, and a
+resource-limited Mayan EDMS Compose deployment. See
+[the local guide](../infra/mayan/README.md) for commands and limitations.
+Docker Desktop with Linux containers is needed for that trial. No custom
+application server or automated test suite exists yet.
 
 ## Before ECM deployment
 

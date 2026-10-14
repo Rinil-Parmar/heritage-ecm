@@ -1,0 +1,107 @@
+name: heritage-alfresco
+
+services:
+  postgres:
+    image: postgres:17.9
+    mem_limit: 384m
+    environment:
+      POSTGRES_DB: alfresco
+      POSTGRES_USER: alfresco
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Create .env first}
+    command: postgres -c max_connections=100 -c shared_buffers=64MB
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U alfresco -d alfresco']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  activemq:
+    image: alfresco/alfresco-activemq:6.2.9-jre17-rockylinux8
+    mem_limit: 384m
+    environment:
+      ACTIVEMQ_ADMIN_LOGIN: admin
+      ACTIVEMQ_ADMIN_PASSWORD: ${BROKER_PASSWORD:?Create .env first}
+      ACTIVEMQ_OPTS_MEMORY: '-Xms64m -Xmx192m'
+    volumes:
+      - messaging:/opt/activemq/data
+
+  alfresco:
+    image: alfresco/alfresco-content-repository-community:26.2.0
+    mem_limit: 1900m
+    environment:
+      JAVA_TOOL_OPTIONS: >-
+        -Dencryption.keystore.type=JCEKS
+        -Dencryption.cipherAlgorithm=DESede/CBC/PKCS5Padding
+        -Dencryption.keyAlgorithm=DESede
+        -Dencryption.keystore.location=/usr/local/tomcat/shared/classes/alfresco/extension/keystore/keystore
+        -Dmetadata-keystore.password=mp6yc0UD9e
+        -Dmetadata-keystore.aliases=metadata
+        -Dmetadata-keystore.metadata.password=oKIWzVdEdA
+        -Dmetadata-keystore.metadata.algorithm=DESede
+      JAVA_OPTS: >-
+        -Xms256m -Xmx1200m
+        -Ddb.driver=org.postgresql.Driver
+        -Ddb.username=alfresco
+        -Ddb.password=${DB_PASSWORD}
+        -Ddb.url=jdbc:postgresql://postgres:5432/alfresco
+        -Dindex.subsystem.name=noindex
+        -Dlocal.transform.service.enabled=false
+        -Dtransform.service.enabled=false
+        -Dshare.host=localhost
+        -Dshare.port=8081
+        -Dalfresco.host=localhost
+        -Dalfresco.port=8080
+        -Dalfresco.protocol=http
+        -Daos.baseUrlOverwrite=http://localhost:8080/alfresco/aos
+        -Dmessaging.broker.url=tcp://activemq:61616
+        -Dmessaging.broker.username=admin
+        -Dmessaging.broker.password=${BROKER_PASSWORD}
+        -Ddeployment.method=DOCKER_COMPOSE
+    ports:
+      - '127.0.0.1:8080:8080'
+    volumes:
+      - content:/usr/local/tomcat/alf_data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      activemq:
+        condition: service_started
+    healthcheck:
+      test: [CMD, curl, -f, 'http://localhost:8080/alfresco/api/-default-/public/alfresco/versions/1/probes/-ready-']
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 180s
+
+  share:
+    image: alfresco/alfresco-share:26.2.2
+    mem_limit: 640m
+    environment:
+      REPO_HOST: alfresco
+      REPO_PORT: '8080'
+      CSRF_FILTER_ORIGIN: 'http://localhost:8081'
+      CSRF_FILTER_REFERER: 'http://localhost:8081/share/.*'
+      JAVA_OPTS: >-
+        -Xms128m -Xmx384m
+        -Dalfresco.host=localhost
+        -Dalfresco.port=8080
+        -Dalfresco.context=alfresco
+        -Dalfresco.protocol=http
+    ports:
+      - '127.0.0.1:8081:8080'
+    depends_on:
+      alfresco:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, -f, 'http://localhost:8080/share/']
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+volumes:
+  database:
+  content:
+  messaging:
