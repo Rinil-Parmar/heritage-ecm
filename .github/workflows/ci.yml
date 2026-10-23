@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate repository and Mayan Compose
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whitespace errors
+        run: git diff --check origin/main...HEAD
+
+      - name: Check tracked files for secrets and runtime data
+        shell: bash
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|(^|/)(privkey\.pem|id_rsa|id_ed25519|credentials\.json)$|(^|/)(backups|uploads|volumes)/'; then
+            echo "A secret or runtime-data path is tracked. Remove it from Git and rotate exposed credentials."
+            exit 1
+          fi
+
+      - name: Validate Mayan Compose configuration
+        working-directory: infra/mayan
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
