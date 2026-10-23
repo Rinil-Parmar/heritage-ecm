@@ -1,0 +1,33 @@
+name: University VM smoke test
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: university-vm-smoke-test
+  cancel-in-progress: false
+
+jobs:
+  verify-deployment:
+    name: Verify rootless Docker and Mayan
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, ecm-deploy]
+    timeout-minutes: 5
+    steps:
+      - name: Verify rootless Docker is available
+        shell: bash
+        run: |
+          context="$(docker context show)"
+          if [[ "$context" != "rootless" ]]; then
+            echo "Expected the rootless Docker context; found: $context"
+            exit 1
+          fi
+          docker info --format '{{json .SecurityOptions}}' | grep -q 'rootless'
+
+      - name: Verify the existing Mayan interface responds locally
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --output /dev/null --max-time 15 \
+            http://127.0.0.1:8080/
