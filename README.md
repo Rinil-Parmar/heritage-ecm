@@ -59,6 +59,10 @@ are not required to clone or use this repository.
 
 ## Getting started
 
+Start with the [ECM learning guide](docs/ecm-learning-guide.md) to understand
+the VM, Nginx, Docker, GitHub approvals, daily commands, and future application
+development. It distinguishes the current Mayan pipeline from planned features.
+
 1. Clone this repository and open it in your editor.
 2. Read the [development guide](docs/development.md).
 3. Review the [requirements](docs/requirements.md) and
