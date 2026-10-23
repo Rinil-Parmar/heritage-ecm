@@ -67,6 +67,8 @@ are not required to clone or use this repository.
 
 See the [local Mayan guide](infra/mayan/README.md) for container versions and
 runtime commands. No custom application build exists at this stage.
+See the [deployment pipeline guide](docs/deployment-pipeline.md) for the
+approval-gated workflow that validates or redeploys Mayan on the university VM.
 
 ## Milestones
 

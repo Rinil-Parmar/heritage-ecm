@@ -1,0 +1,82 @@
+name: Deploy Mayan to university VM
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Validate the production Compose setup or deploy its configured images
+        required: true
+        type: choice
+        options:
+          - validate
+          - deploy
+        default: validate
+
+permissions: {}
+
+concurrency:
+  group: mayan-production-deployment
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Validate production setup
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, ecm-deploy]
+    timeout-minutes: 5
+    steps:
+      - name: Verify rootless Docker
+        shell: bash
+        run: |
+          context="$(docker context show)"
+          if [[ "$context" != "rootless" ]]; then
+            echo "Expected the rootless Docker context; found: $context"
+            exit 1
+          fi
+          docker info --format '{{json .SecurityOptions}}' | grep -q 'rootless'
+
+      - name: Validate the VM production Compose configuration
+        shell: bash
+        run: |
+          cd "$HOME/ECM_Archeology/deployment/mayan"
+          test -r docker-compose.yml
+          test -r .env
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.yml config --services
+
+  deploy:
+    name: Deploy Mayan after approval
+    needs: preflight
+    if: github.ref == 'refs/heads/main' && inputs.operation == 'deploy'
+    runs-on: [self-hosted, linux, x64, ecm-deploy]
+    environment:
+      name: mayan-production
+      url: https://archeoecm.cs.uwindsor.ca
+    timeout-minutes: 25
+    steps:
+      - name: Pull configured production images
+        shell: bash
+        run: |
+          cd "$HOME/ECM_Archeology/deployment/mayan"
+          docker compose -f docker-compose.yml pull
+
+      - name: Apply production Compose configuration
+        shell: bash
+        run: |
+          cd "$HOME/ECM_Archeology/deployment/mayan"
+          docker compose -f docker-compose.yml up -d
+
+      - name: Wait for Mayan to respond locally
+        shell: bash
+        run: |
+          for attempt in {1..36}; do
+            if curl --fail --silent --show-error --output /dev/null --max-time 10 \
+              http://127.0.0.1:8080/; then
+              echo "Mayan is responding on the VM."
+              exit 0
+            fi
+            sleep 5
+          done
+          cd "$HOME/ECM_Archeology/deployment/mayan"
+          docker compose -f docker-compose.yml ps
+          exit 1
