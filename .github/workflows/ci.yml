@@ -39,3 +39,8 @@ jobs:
         run: |
           cp .env.example .env
           docker compose config --quiet
+
+      - name: Validate production Mayan Compose configuration
+        working-directory: infra/mayan/production
+        run: |
+          MAYAN_DOCKER_ENV_FILE=.env.example docker compose --env-file .env.example -p archeoecm -f docker-compose.yml config --quiet

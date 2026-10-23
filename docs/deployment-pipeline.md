@@ -141,6 +141,12 @@ records or upgrading its data format.
 
 ## GitHub settings to maintain
 
+The working VM Compose file, including the verified HTTPS login fix, is recorded
+under [infra/mayan/production](../infra/mayan/production/README.md). Its example
+environment contains placeholders only. This workflow still uses the file
+already on the VM; it does not check out or install the repository copy. Follow
+that directory's review and file-update instructions for future changes.
+
 - Protect `main` so changes arrive through pull requests; require the CI check
   to pass before merging where repository rules permit.
 - In **Settings → Environments → mayan-production**, restrict deployments to
