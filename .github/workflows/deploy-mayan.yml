@@ -41,8 +41,8 @@ jobs:
           cd "$HOME/ECM_Archeology/deployment/mayan"
           test -r docker-compose.yml
           test -r .env
-          docker compose -f docker-compose.yml config --quiet
-          docker compose -f docker-compose.yml config --services
+          docker compose -p archeoecm -f docker-compose.yml config --quiet
+          docker compose -p archeoecm -f docker-compose.yml config --services
 
   deploy:
     name: Deploy Mayan after approval
@@ -58,13 +58,13 @@ jobs:
         shell: bash
         run: |
           cd "$HOME/ECM_Archeology/deployment/mayan"
-          docker compose -f docker-compose.yml pull
+          docker compose -p archeoecm -f docker-compose.yml pull
 
       - name: Apply production Compose configuration
         shell: bash
         run: |
           cd "$HOME/ECM_Archeology/deployment/mayan"
-          docker compose -f docker-compose.yml up -d
+          docker compose -p archeoecm -f docker-compose.yml up -d
 
       - name: Wait for Mayan to respond locally
         shell: bash
@@ -78,5 +78,5 @@ jobs:
             sleep 5
           done
           cd "$HOME/ECM_Archeology/deployment/mayan"
-          docker compose -f docker-compose.yml ps
+          docker compose -p archeoecm -f docker-compose.yml ps
           exit 1
