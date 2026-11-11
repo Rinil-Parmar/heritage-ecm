@@ -43,9 +43,9 @@ export function DocumentsPanel() {
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Documents</h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-stone-600">Your organization’s records, with their context close at hand.</p>
         </div>
-        <button onClick={() => setRefresh(value => value + 1)} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium hover:bg-stone-100 disabled:opacity-50">
+        <div className="flex flex-wrap gap-3"><Link to="/app/upload" className="inline-flex items-center rounded-xl bg-[#233b33] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#304e43]">Upload document</Link><button onClick={() => setRefresh(value => value + 1)} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium hover:bg-stone-100 disabled:opacity-50">
           <RefreshCw aria-hidden size={16} className={loading ? 'animate-spin' : ''} />Refresh
-        </button>
+        </button></div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm" aria-busy={loading}>

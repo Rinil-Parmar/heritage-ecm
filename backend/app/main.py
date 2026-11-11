@@ -7,6 +7,7 @@ from app.auth import router
 from app.config import Settings
 from app.sessions import SessionStore
 from app.documents import router as documents_router
+from app.uploads import router as uploads_router
 
 
 class HealthResponse(BaseModel):
@@ -19,6 +20,7 @@ app.state.settings = Settings()
 app.state.sessions = SessionStore()
 app.include_router(router)
 app.include_router(documents_router)
+app.include_router(uploads_router)
 
 
 @app.exception_handler(RequestValidationError)

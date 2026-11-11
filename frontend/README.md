@@ -28,7 +28,13 @@ The sign-in page uses existing accounts and redirects to `/app` on success.
 The application now lists real documents accessible to the signed-in account,
 with pagination and refresh. Select a title to open its detail page, preview a
 supported original file, or download it. Empty, loading, and service/permission
-error states are included. Upload and search are not part of this increment.
+error states are included. The upload screen loads metadata fields for the chosen
+document type and supports one file up to 50 MB, upload progress, and metadata-only
+recovery after partial success. Saved metadata is shown on the record detail page.
+Upload includes searchable multi-selects for existing tags and cabinets, with
+cabinet paths, optional selections, and retry of incomplete assignments on the
+same record. The detail page shows tags/cabinets returned for the current user.
+Search across documents and standalone cabinet browsing follow later.
 API tokens are never stored in localStorage or returned to React. The browser
 holds an HttpOnly session cookie, and CSRF state stays in component memory.
 

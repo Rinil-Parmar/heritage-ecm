@@ -101,8 +101,81 @@ The current step has not been live-verified against an authenticated VM session.
 
 ## Next increment
 
-Add upload through the same per-user permission boundary. Never use a shared
-administrator token.
+Expand metadata editing, search, and cabinet browsing through the same
+per-user permission boundary. Never use a shared administrator token.
+
+## Upload with metadata
+
+Open `/app/upload` or select **Upload document** in the library. Select an existing
+document type, enter title/description and its configured metadata fields, and
+choose one non-empty file up to 50 MB. Required fields are checked again by
+FastAPI against the current type configuration. Configuration expressions and
+defaults are not executed in React or FastAPI. Constrained metadata currently
+uses text inputs; Mayan validates/parses values when saved. Lookup dropdowns and
+specialized date inputs are not implemented yet.
+
+API routes:
+- `GET /api/v1/upload/types`: types visible to the user (visibility does not imply create permission).
+- `GET /api/v1/upload/types/{id}/fields`: configured metadata fields and required flags.
+- `POST /api/v1/upload`: multipart `file` and JSON `details`, CSRF and Origin protected.
+- `GET /api/v1/records/{id}/metadata`: actual saved metadata for the detail page.
+- `PUT /api/v1/records/{id}/metadata`: retry metadata on an already-created record.
+
+Mayan's 4.x `/documents/upload/` endpoint creates the document and queues file
+processing. Metadata is saved separately via its metadata endpoints. These are
+not one database transaction: a successful file submission can have incomplete
+metadata. The UI preserves the document ID and offers **Retry incomplete steps**;
+existing metadata entries are read and updated rather than blindly duplicated.
+Metadata view/add/edit permissions may be needed in addition to document-create
+permission. All requests use the user's own token. No permissions are expanded.
+
+Upload retries use a session-scoped, in-memory operation key for one hour. A lost
+upstream response is treated as uncertain, never automatically retried. Review
+the document list before starting a new upload. This ledger is local development
+only: restart loses it. Production needs durable idempotency/reconciliation,
+shared session storage, and request-size limits at Nginx/ASGI ingress. The current
+handler requires Content-Length and checks the parsed file size; it is not a
+complete defense against oversized malicious streamed requests. Multipart
+parsing can spool a temporary file, which is closed after the request; no permanent
+file copy is retained by FastAPI.
+
+The newer upstream source deprecates `/documents/upload/` for eventual Mayan 5;
+review the installed API and migrate to source capture actions before upgrading.
+Current implementation targets the existing 4.x installation.
+
+Manual review (not run automatically): choose a type with required metadata,
+confirm missing required values prevent submission, upload a small file, open
+the created record and verify its metadata and file. Use **Refresh record** if
+processing has not attached the file yet. Repeat with a restricted account and
+a rejected metadata value; verify metadata-only retry does not create another
+document. Progress measures browser-to-FastAPI transfer, not OCR completion.
+
+## Tags and cabinets during upload
+
+The upload form fetches existing, user-visible tags and cabinets from
+`GET /api/v1/upload/tags` and `/upload/cabinets`. Cabinet choices show full paths.
+Selections are optional, searchable, and limited to 50 of each. The API reads all
+pages within its configuration bound, and uses permission-filtered cabinet rows,
+not recursively embedded children. No new tags or cabinets are created.
+
+Before creating the document, selected IDs are checked against current visible
+options. After creation, FastAPI reads existing record assignments and attaches
+only missing tags/cabinets. Mayan independently enforces attach/add permission
+on each operation. View permission does not guarantee assignment permission.
+Metadata, tag assignment, and cabinet assignment can succeed independently;
+the UI reports full completion only when all requested steps succeed.
+
+`PUT /api/v1/records/{id}/complete-upload` retries metadata and assignments on the
+same document. It never re-uploads the file or removes existing assignments.
+The UI freezes selected tags/cabinets once a record exists. Administrators can
+correct permissions before retrying. Record detail reads assignments via
+`GET /api/v1/records/{id}/organization/tags` and `/organization/cabinets`.
+
+Manual check: select two tags and a nested cabinet, upload a small document,
+then confirm its metadata and organization on the detail page and in Mayan.
+Repeat without selections, with restricted permissions, and with an assignment
+failure followed by retry. Verify that retry creates no additional document.
+Automated tests and live browser checks were not run for this increment.
 
 ## Document details and original files
 

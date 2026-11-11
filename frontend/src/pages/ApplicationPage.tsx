@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Archive, ArrowUpRight, Files, LogOut } from 'lucide-react'
 import { getSession, signOut, type Session } from '../api/auth'
 import { ApiError } from '../api/client'
 import { DocumentsPanel } from '../components/DocumentsPanel'
 import { DocumentDetailPanel } from '../components/DocumentDetailPanel'
+import { UploadPanel } from '../components/UploadPanel'
 
 export function ApplicationPage() {
   const navigate = useNavigate()
   const { documentId } = useParams()
+  const location = useLocation()
   const [session, setSession] = useState<Session | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -57,7 +59,7 @@ export function ApplicationPage() {
       <main className="mx-auto max-w-7xl px-6 py-9 sm:px-10 sm:py-12">
         {error && <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}{!session && <button onClick={() => setAttempt(attempt + 1)} className="ml-4 underline">Try again</button>}</div>}
         {!session && !error && <p role="status">Checking your session…</p>}
-        {session && (documentId ? <DocumentDetailPanel key={documentId} id={Number(documentId)} /> : <DocumentsPanel />)}
+        {session && (location.pathname === '/app/upload' ? <UploadPanel csrf={session.csrf_token} /> : documentId ? <DocumentDetailPanel key={documentId} id={Number(documentId)} /> : <DocumentsPanel />)}
       </main>
       </div>
     </div>

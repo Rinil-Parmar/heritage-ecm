@@ -9,6 +9,7 @@ export function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/sign-in" element={<SignInPage />} />
       <Route path="/app" element={<ApplicationPage />} />
+      <Route path="/app/upload" element={<ApplicationPage />} />
       <Route path="/app/documents/:documentId" element={<ApplicationPage />} />
     </Routes>
   )

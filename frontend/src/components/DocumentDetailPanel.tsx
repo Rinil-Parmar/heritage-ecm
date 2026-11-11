@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Download, FileText, LoaderCircle, RefreshCw } from 'lucide-react'
 import { getDocument, getDocumentFile, type DocumentDetail } from '../api/documents'
 import { ApiError } from '../api/client'
+import { RecordMetadata } from './RecordMetadata'
+import { RecordOrganization } from './RecordOrganization'
 
 function date(value: string | null) {
   if (!value) return 'Not available'
@@ -94,6 +96,7 @@ export function DocumentDetailPanel({ id }: { id: number }) {
 
   return <div>
     <Link to="/app" className="mb-7 inline-flex items-center gap-2 text-sm text-stone-600 hover:text-stone-950"><ArrowLeft aria-hidden size={16} />Back to documents</Link>
+    {document && <button onClick={() => setAttempt(value => value + 1)} className="mb-7 ml-5 inline-flex items-center gap-2 text-sm text-stone-600"><RefreshCw size={15} aria-hidden />Refresh record</button>}
     {error ? <div role="alert" className="rounded-2xl border border-stone-200 bg-white p-8"><h1 className="text-xl font-semibold">Document unavailable</h1><p className="mt-3 text-sm text-stone-600">{error}</p><button onClick={() => setAttempt(value => value + 1)} className="mt-5 inline-flex items-center gap-2 text-sm font-semibold underline"><RefreshCw size={15} aria-hidden />Try again</button></div>
       : !document ? <p role="status" className="py-12 text-stone-500">Loading document…</p>
       : <>
@@ -111,6 +114,8 @@ export function DocumentDetailPanel({ id }: { id: number }) {
             ['Record identifier', document.uuid || String(document.id)],
           ].map(([label, value]) => <div key={label}><dt className="text-xs text-stone-500">{label}</dt><dd className="mt-1 break-words">{value}</dd></div>)}</dl></aside>
         </div>
+        <RecordMetadata key={attempt} id={document.id} />
+        <RecordOrganization key={`organization-${attempt}`} id={document.id} />
       </>}
   </div>
 }
