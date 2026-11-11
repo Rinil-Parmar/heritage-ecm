@@ -5,6 +5,7 @@ import { getDocument, getDocumentFile, type DocumentDetail } from '../api/docume
 import { ApiError } from '../api/client'
 import { RecordMetadata } from './RecordMetadata'
 import { RecordOrganization } from './RecordOrganization'
+import { DocumentVersions } from './DocumentVersions'
 
 function date(value: string | null) {
   if (!value) return 'Not available'
@@ -116,6 +117,7 @@ export function DocumentDetailPanel({ id, csrf }: { id: number; csrf: string }) 
         </div>
         <RecordMetadata key={attempt} id={document.id} typeId={document.document_type?.id} csrf={csrf} />
         <RecordOrganization key={`organization-${attempt}`} id={document.id} />
+        <DocumentVersions key={`versions-${attempt}`} id={document.id} csrf={csrf} />
       </>}
   </div>
 }
