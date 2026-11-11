@@ -17,6 +17,13 @@ export interface DocumentPage {
   results: DocumentSummary[]
 }
 
+export interface DocumentFilters {
+  query?: string
+  documentTypeId?: number
+  createdFrom?: string
+  createdTo?: string
+}
+
 export interface DocumentDetail extends DocumentSummary {
   uuid: string
   file_latest: { id: number; filename: string; mimetype: string; size: number | null; timestamp: string | null } | null
@@ -51,8 +58,13 @@ export async function getDocumentFile(id: number, preview: boolean, signal?: Abo
   return response.blob()
 }
 
-export async function listDocuments(page: number, signal?: AbortSignal): Promise<DocumentPage> {
-  const response = await fetch(`/api/v1/documents?page=${page}`, {
+export async function listDocuments(page: number, filters: DocumentFilters = {}, signal?: AbortSignal): Promise<DocumentPage> {
+  const params = new URLSearchParams({ page: String(page) })
+  if (filters.query) params.set('query', filters.query)
+  if (filters.documentTypeId) params.set('document_type_id', String(filters.documentTypeId))
+  if (filters.createdFrom) params.set('created_from', filters.createdFrom)
+  if (filters.createdTo) params.set('created_to', filters.createdTo)
+  const response = await fetch(`/api/v1/documents?${params}`, {
     credentials: 'same-origin', cache: 'no-store', signal,
     headers: { Accept: 'application/json' },
   })
@@ -61,6 +73,7 @@ export async function listDocuments(page: number, signal?: AbortSignal): Promise
       401: 'Your session has ended. Please sign in again.',
       403: 'Your account does not have access to the document list.',
       404: 'This page is no longer available. Return to the first page or try refreshing.',
+      422: 'The selected search filters are invalid. Check the dates and try again.',
       429: 'The document service is busy. Please try again shortly.',
     }
     throw new ApiError(messages[response.status] || 'Unable to load documents. Please try again.', response.status)

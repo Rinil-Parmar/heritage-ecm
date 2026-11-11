@@ -1,6 +1,6 @@
 """Read-only document access using each session's upstream permissions."""
 
-from datetime import datetime
+from datetime import date, datetime, time
 from urllib.parse import quote
 
 import httpx
@@ -161,19 +161,46 @@ async def document_file(request: Request, document_id: int, preview: bool = Fals
 
 
 @router.get("", response_model=DocumentPage)
-async def list_documents(request: Request, page: int = Query(default=1, ge=1, le=100000)):
+async def list_documents(
+    request: Request,
+    page: int = Query(default=1, ge=1, le=100000),
+    query: str = Query(default="", max_length=200),
+    document_type_id: int | None = Query(default=None, ge=1),
+    created_from: date | None = None,
+    created_to: date | None = None,
+):
     store = store_for(request)
     session_id = request.cookies.get(COOKIE_NAME)
     session = store.get(session_id)
     if not session:
         raise HTTPException(401, "Please sign in.")
+    if created_from and created_to and created_from > created_to:
+        raise HTTPException(422, "The start date must be on or before the end date.")
+
     settings = settings_for(request)
+    search_active = bool(query.strip() or document_type_id or created_from or created_to)
+    upstream_path = "/search/documents.documentsearchresult/" if search_active else "/documents/"
+    params: dict[str, str | int] = {"page": page}
+    if search_active:
+        params["_match_all"] = "yes"
+        if query.strip():
+            params["q"] = query.strip()
+        if document_type_id:
+            params["document_type__id"] = f"={document_type_id}"
+        if created_from and created_to:
+            start = datetime.combine(created_from, time.min).isoformat()
+            end = datetime.combine(created_to, time.max).isoformat()
+            params["datetime_created"] = f"[]{start}..{end}"
+        elif created_from:
+            params["datetime_created"] = f">={datetime.combine(created_from, time.min).isoformat()}"
+        elif created_to:
+            params["datetime_created"] = f"<={datetime.combine(created_to, time.max).isoformat()}"
     # Use a fixed path and bounded page number, never a URL supplied by the browser.
     async with httpx.AsyncClient(timeout=settings.request_timeout, follow_redirects=False) as client:
         try:
             response = await client.get(
-                str(settings.mayan_api_url).rstrip("/") + "/documents/",
-                params={"page": page},
+                str(settings.mayan_api_url).rstrip("/") + upstream_path,
+                params=params,
                 headers={"Accept": "application/json", "Authorization": f"Token {session.token}"},
             )
         except httpx.HTTPError:
@@ -183,6 +210,8 @@ async def list_documents(request: Request, page: int = Query(default=1, ge=1, le
         raise HTTPException(401, "Your session has ended. Please sign in again.")
     if response.status_code == 403:
         raise HTTPException(403, "Your account cannot access this document list.")
+    if response.status_code == 400:
+        raise HTTPException(422, "These search filters could not be applied. Adjust them and try again.")
     if response.status_code == 404:
         raise HTTPException(404, "This document page is no longer available.")
     if response.status_code == 429:
