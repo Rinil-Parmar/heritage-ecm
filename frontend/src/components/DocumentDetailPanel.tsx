@@ -116,7 +116,7 @@ export function DocumentDetailPanel({ id, csrf }: { id: number; csrf: string }) 
           ].map(([label, value]) => <div key={label}><dt className="text-xs text-stone-500">{label}</dt><dd className="mt-1 break-words">{value}</dd></div>)}</dl></aside>
         </div>
         <RecordMetadata key={attempt} id={document.id} typeId={document.document_type?.id} csrf={csrf} />
-        <RecordOrganization key={`organization-${attempt}`} id={document.id} />
+        <RecordOrganization key={`organization-${attempt}`} id={document.id} csrf={csrf} />
         <DocumentVersions key={`versions-${attempt}`} id={document.id} csrf={csrf} />
       </>}
   </div>

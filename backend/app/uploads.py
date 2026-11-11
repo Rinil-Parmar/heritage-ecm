@@ -1,6 +1,7 @@
 """Document capture and recoverable metadata writes for Mayan 4.x."""
 import secrets
 import time
+import re
 from uuid import UUID
 
 import httpx
@@ -79,25 +80,79 @@ class OrganizationSelection(BaseModel):
     cabinet_ids: list[PositiveInt] = Field(default_factory=list, max_length=50)
 
 
+def tag_rows(rows: list[dict]):
+    result = []
+    for row in rows:
+        color = str(row.get("color") or "").strip()
+        if not re.fullmatch(r"#?[0-9a-fA-F]{6}", color):
+            color = "#6b7280"
+        elif not color.startswith("#"):
+            color = "#" + color
+        result.append({"id": row["id"], "label": row["label"], "color": color.lower()})
+    return sorted(result, key=lambda item: item["label"].casefold())
+
+
+def cabinet_rows(rows: list[dict]):
+    """Flatten Mayan's recursive cabinet serializer without duplicating nodes."""
+    nodes: dict[int, dict] = {}
+
+    def collect(row: dict):
+        if not isinstance(row, dict) or not isinstance(row.get("id"), int):
+            return
+        nodes[row["id"]] = row
+        for child in row.get("children") or []:
+            collect(child)
+
+    for row in rows:
+        collect(row)
+
+    def depth(row: dict):
+        value = 0
+        parent_id = row.get("parent_id")
+        seen = {row["id"]}
+        while isinstance(parent_id, int) and parent_id in nodes and parent_id not in seen and value < 20:
+            seen.add(parent_id)
+            value += 1
+            parent_id = nodes[parent_id].get("parent_id")
+        return value
+
+    result = [{
+        "id": row["id"], "label": row["label"],
+        "full_path": row.get("full_path") or row["label"],
+        "parent_id": row.get("parent_id"), "depth": depth(row)
+    } for row in nodes.values()]
+    return sorted(result, key=lambda item: (str(item["full_path"]).casefold(), item["id"]))
+
+
+def assigned_cabinet_rows(rows: list[dict]):
+    """Serialize only directly assigned cabinets, not their nested children."""
+    result = [{
+        "id": row["id"], "label": row["label"],
+        "full_path": row.get("full_path") or row["label"],
+        "parent_id": row.get("parent_id"), "depth": 0
+    } for row in rows]
+    return sorted(result, key=lambda item: (str(item["full_path"]).casefold(), item["id"]))
+
+
+async def organization_options(request: Request, kind: str):
+    rows = await all_rows(request, f"/{kind}/")
+    return tag_rows(rows) if kind == "tags" else cabinet_rows(rows)
+
+
 @router.get("/upload/tags")
 async def upload_tags(request: Request):
-    rows = await all_rows(request, "/tags/")
-    return {"results": [{"id": row["id"], "label": row["label"]} for row in rows]}
+    return {"results": await organization_options(request, "tags")}
 
 
 @router.get("/upload/cabinets")
 async def upload_cabinets(request: Request):
-    rows = await all_rows(request, "/cabinets/")
-    # Use the permission-filtered result rows, not recursively embedded children.
-    return {"results": [{"id": row["id"], "label": row["label"],
-                         "full_path": row.get("full_path") or row["label"]} for row in rows]}
+    return {"results": await organization_options(request, "cabinets")}
 
 
 async def validate_organization(request: Request, selection: OrganizationSelection):
     for kind, selected in (("tags", selection.tag_ids), ("cabinets", selection.cabinet_ids)):
         if selected:
-            rows = await all_rows(request, f"/{kind}/")
-            available = {row["id"] for row in rows}
+            available = {row["id"] for row in await organization_options(request, kind)}
             if set(selected) - available:
                 raise HTTPException(422, f"Some selected {kind} are no longer available. Reload the choices before uploading.")
 
@@ -134,8 +189,68 @@ async def record_organization(request: Request, document_id: int, kind: str):
     if kind not in ("tags", "cabinets") or document_id < 1:
         raise HTTPException(404, "Not found.")
     rows = await all_rows(request, f"/documents/{document_id}/{kind}/")
-    return {"results": [{"id": row["id"], "label": row["label"],
-                         "full_path": row.get("full_path") or row["label"]} for row in rows]}
+    return {"results": tag_rows(rows) if kind == "tags" else assigned_cabinet_rows(rows)}
+
+
+class OrganizationUpdate(OrganizationSelection):
+    original_tag_ids: list[PositiveInt] = Field(default_factory=list, max_length=50)
+    original_cabinet_ids: list[PositiveInt] = Field(default_factory=list, max_length=50)
+
+
+async def organization_assigned(request: Request, document_id: int, kind: str):
+    rows = await all_rows(request, f"/documents/{document_id}/{kind}/")
+    return tag_rows(rows) if kind == "tags" else assigned_cabinet_rows(rows)
+
+
+@router.put("/records/{document_id}/organization", dependencies=[Depends(trusted_origin), Depends(require_write)])
+async def edit_organization(request: Request, document_id: int, body: OrganizationUpdate):
+    if document_id < 1:
+        raise HTTPException(404, "Record not found.")
+    await read_detail(request, document_id)
+    current_tags = await organization_assigned(request, document_id, "tags")
+    current_cabinets = await organization_assigned(request, document_id, "cabinets")
+    if {row["id"] for row in current_tags} != set(body.original_tag_ids) or \
+            {row["id"] for row in current_cabinets} != set(body.original_cabinet_ids):
+        raise HTTPException(409, "Tags or cabinets changed after you opened the editor. Reload the current assignments before saving.")
+
+    await validate_organization(request, body)
+    errors = []
+    plans = (
+        ("tags", {row["id"] for row in current_tags}, set(body.tag_ids)),
+        ("cabinets", {row["id"] for row in current_cabinets}, set(body.cabinet_ids)),
+    )
+    for kind, existing, desired in plans:
+        for action, item_ids in (("add", desired - existing), ("remove", existing - desired)):
+            for item_id in sorted(item_ids):
+                if kind == "tags":
+                    endpoint_action = "attach" if action == "add" else "remove"
+                    path = f"/documents/{document_id}/tags/{endpoint_action}/"
+                    payload = {"tag": item_id}
+                else:
+                    path = f"/cabinets/{item_id}/documents/{action}/"
+                    payload = {"document": document_id}
+                try:
+                    response = await call(request, "POST", path, json=payload)
+                    if response.status_code not in (200, 201, 202, 204):
+                        if response.status_code == 401:
+                            check_upstream(request, response.status_code)
+                        label = "tag" if kind == "tags" else "cabinet"
+                        errors.append(f"Could not {action} {label} #{item_id}. Check your assignment permissions.")
+                except HTTPException as exc:
+                    if exc.status_code == 401:
+                        raise
+                    errors.append(f"The {kind} change for item #{item_id} could not be confirmed.")
+
+    final_tags = await organization_assigned(request, document_id, "tags")
+    final_cabinets = await organization_assigned(request, document_id, "cabinets")
+    matches = ({row["id"] for row in final_tags} == set(body.tag_ids) and
+               {row["id"] for row in final_cabinets} == set(body.cabinet_ids))
+    if not matches and not errors:
+        errors.append("Some organization changes are still processing. Reload the assignments before retrying.")
+    return {
+        "organization_saved": matches, "errors": errors,
+        "tags": final_tags, "cabinets": final_cabinets
+    }
 
 
 class CaptureData(OrganizationSelection):

@@ -2,7 +2,7 @@ import { ApiError } from './client'
 
 export interface MetadataField { id: number; label: string; required: boolean; constrained: boolean }
 export interface UploadResult { document_id: number; metadata_saved: boolean; organization_saved: boolean; errors: string[] }
-export interface OrganizationOption { id: number; label: string; full_path?: string }
+export interface OrganizationOption { id: number; label: string; full_path?: string; color?: string; parent_id?: number | null; depth?: number }
 
 export async function captureRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`/api/v1/${path}`, { ...options, credentials: 'same-origin', cache: 'no-store' })
