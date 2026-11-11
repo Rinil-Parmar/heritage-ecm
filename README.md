@@ -34,10 +34,11 @@ extensions after the core workflow is complete.
 
 ## Technical direction
 
-Use Mayan EDMS as the document system of record. React and a Spring Boot service
-will provide the archaeological research interface and domain model where Mayan's
-document-oriented model is insufficient. The local proof of concept must confirm
-the platform's resource usage and API fit.
+Use Mayan EDMS as the document system of record. React and a Python FastAPI service
+provide the custom research interface and application API. The backend foundation
+is documented in [backend/README.md](backend/README.md). Local sign-in, sessions,
+the paginated document library, record details, previews, and original-file
+downloads are implemented. Upload is next.
 
 Access ECM content through supported APIs. Avoid direct writes to its database
 and duplicated document storage in a separate application.
@@ -48,12 +49,13 @@ and duplicated document storage in a separate application.
 heritage-ecm/
   .github/       Issue and pull request templates
   docs/          Requirements, evaluation, decisions, and setup guidance
+  frontend/      React landing page and document interface
+  backend/       FastAPI application API
   infra/         ECM deployment and configuration
   scripts/       Future repeatable setup and maintenance tools
   samples/       Synthetic or appropriately licensed demonstration data
 ```
 
-Application directories will be introduced when their implementation begins.
 Original course documents remain in the sibling `../Documents/` directory and
 are not required to clone or use this repository.
 
@@ -66,7 +68,7 @@ are not required to clone or use this repository.
 4. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for branches and pull requests.
 
 See the [local Mayan guide](infra/mayan/README.md) for container versions and
-runtime commands. No custom application build exists at this stage.
+runtime commands. See the frontend and backend READMEs for local application setup.
 See the [deployment pipeline guide](docs/deployment-pipeline.md) for the
 approval-gated workflow that validates or redeploys Mayan on the university VM.
 
