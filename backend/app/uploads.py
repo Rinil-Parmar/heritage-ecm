@@ -260,6 +260,34 @@ class CaptureData(OrganizationSelection):
     metadata: dict[str, str] = Field(default_factory=dict, max_length=100)
 
 
+class RecordProperties(BaseModel):
+    label: str = Field(min_length=1, max_length=255)
+    description: str = Field(max_length=10000)
+    language: str = Field(min_length=1, max_length=16)
+
+
+class PropertyUpdate(BaseModel):
+    values: RecordProperties
+    original: RecordProperties
+
+
+@router.put('/records/{document_id}/properties', dependencies=[Depends(trusted_origin), Depends(require_write)])
+async def edit_properties(request: Request, document_id: int, body: PropertyUpdate):
+    current = await read_detail(request, document_id)
+    fields = ('label', 'description', 'language')
+    if any(getattr(current, field) != getattr(body.original, field) for field in fields):
+        raise HTTPException(409, 'This record was edited elsewhere. Reload its details before saving.')
+    values = body.values.model_dump()
+    values['label'] = values['label'].strip()
+    if not values['label']:
+        raise HTTPException(422, 'Enter a document title.')
+    response = await call(request, 'PATCH', f'/documents/{document_id}/', json=values)
+    if response.status_code == 400:
+        raise HTTPException(422, 'The title, description, or language was rejected. Check the values and try again.')
+    check_upstream(request, response.status_code)
+    return await read_detail(request, document_id)
+
+
 async def validate_values(request: Request, type_id: int, values: dict[str, str]):
     fields = await fields_for(request, type_id)
     allowed = {str(field["id"]) for field in fields}

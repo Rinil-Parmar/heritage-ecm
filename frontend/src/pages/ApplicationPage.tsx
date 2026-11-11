@@ -6,6 +6,7 @@ import { ApiError } from '../api/client'
 import { DocumentsPanel } from '../components/DocumentsPanel'
 import { DocumentDetailPanel } from '../components/DocumentDetailPanel'
 import { UploadPanel } from '../components/UploadPanel'
+import { CabinetNavigation } from '../components/CabinetNavigation'
 
 export function ApplicationPage() {
   const navigate = useNavigate()
@@ -49,6 +50,7 @@ export function ApplicationPage() {
           <p className="mb-3 px-3 text-[0.65rem] font-semibold tracking-[0.2em] text-stone-400 uppercase">Library</p>
           <Link to="/app" aria-current="page" className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3 text-sm font-medium"><Files aria-hidden size={18} />Documents</Link>
         </nav>
+        {session && <CabinetNavigation />}
         <div className="mt-auto hidden border-t border-white/10 pt-6 lg:block"><p className="font-serif text-xl text-amber-100 italic">Keep the context.</p><p className="mt-2 text-xs leading-6 text-stone-300">Preserve the connections that make your research meaningful.</p><Link to="/" className="mt-5 inline-flex items-center gap-2 text-xs text-stone-300 hover:text-white">About ArcheoECM<ArrowUpRight aria-hidden size={14} /></Link></div>
       </aside>
       <div className="min-w-0">

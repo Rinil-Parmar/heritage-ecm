@@ -166,6 +166,7 @@ async def list_documents(
     page: int = Query(default=1, ge=1, le=100000),
     query: str = Query(default="", max_length=200),
     document_type_id: int | None = Query(default=None, ge=1),
+    cabinet_id: int | None = Query(default=None, ge=1),
     created_from: date | None = None,
     created_to: date | None = None,
 ):
@@ -180,9 +181,13 @@ async def list_documents(
     settings = settings_for(request)
     search_active = bool(query.strip() or document_type_id or created_from or created_to)
     upstream_path = "/search/documents.documentsearchresult/" if search_active else "/documents/"
+    if cabinet_id and not search_active:
+        upstream_path = f"/cabinets/{cabinet_id}/documents/"
     params: dict[str, str | int] = {"page": page}
     if search_active:
         params["_match_all"] = "yes"
+        if cabinet_id:
+            params["cabinets__id"] = f"={cabinet_id}"
         if query.strip():
             params["q"] = query.strip()
         if document_type_id:

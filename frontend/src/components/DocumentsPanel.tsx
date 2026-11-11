@@ -15,6 +15,7 @@ export function DocumentsPanel() {
   const [searchParams, setSearchParams] = useSearchParams()
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
   const filters: DocumentFilters = {
+    cabinetId: Number(searchParams.get('cabinet')) || undefined,
     query: searchParams.get('q')?.trim() || undefined,
     documentTypeId: Number(searchParams.get('type')) || undefined,
     createdFrom: searchParams.get('from') || undefined,
@@ -55,11 +56,12 @@ export function DocumentsPanel() {
       }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [page, filters.query, filters.documentTypeId, filters.createdFrom, filters.createdTo, refresh, navigate])
+  }, [page, filters.cabinetId, filters.query, filters.documentTypeId, filters.createdFrom, filters.createdTo, refresh, navigate])
 
   function applyFilters(event: FormEvent) {
     event.preventDefault()
     const next = new URLSearchParams()
+    if (filters.cabinetId) next.set('cabinet', String(filters.cabinetId))
     if (draftQuery.trim()) next.set('q', draftQuery.trim())
     if (draftType) next.set('type', draftType)
     if (draftFrom) next.set('from', draftFrom)
@@ -72,7 +74,7 @@ export function DocumentsPanel() {
     setDraftType('')
     setDraftFrom('')
     setDraftTo('')
-    setSearchParams(new URLSearchParams())
+    setSearchParams(filters.cabinetId ? new URLSearchParams({ cabinet: String(filters.cabinetId) }) : new URLSearchParams())
   }
 
   function goToPage(nextPage: number) {
@@ -84,6 +86,7 @@ export function DocumentsPanel() {
 
   return (
     <div>
+      {filters.cabinetId && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">Browsing cabinet #{filters.cabinetId}. Search applies inside this folder. <Link to="/app" className="ml-2 font-semibold underline">All documents</Link></p>}
       <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
         <div>
           <p className="mb-2 text-xs font-semibold tracking-[0.18em] text-stone-500 uppercase">Research library</p>

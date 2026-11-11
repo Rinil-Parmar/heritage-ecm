@@ -5,6 +5,7 @@ import { getDocument, getDocumentFile, type DocumentDetail } from '../api/docume
 import { ApiError } from '../api/client'
 import { RecordMetadata } from './RecordMetadata'
 import { RecordOrganization } from './RecordOrganization'
+import { DocumentPropertiesEditor } from './DocumentPropertiesEditor'
 import { DocumentVersions } from './DocumentVersions'
 
 function date(value: string | null) {
@@ -103,6 +104,7 @@ export function DocumentDetailPanel({ id, csrf }: { id: number; csrf: string }) 
       : <>
         <div className="mb-8 flex flex-wrap items-start justify-between gap-5"><div className="min-w-0 flex-1"><p className="mb-2 text-xs font-semibold tracking-widest text-stone-500 uppercase">Record #{document.id}</p><h1 className="break-words text-3xl font-semibold tracking-tight">{document.label || 'Untitled document'}</h1><p className="mt-3 text-sm text-stone-500">{document.document_type?.label || 'Unspecified type'} · Created {date(document.datetime_created)}</p></div>{document.file_latest && <button onClick={download} disabled={downloading} className="inline-flex items-center gap-2 rounded-xl bg-[#233b33] px-5 py-3 text-sm font-semibold text-white hover:bg-[#304e43] disabled:opacity-60">{downloading ? <LoaderCircle aria-hidden size={17} className="animate-spin" /> : <Download aria-hidden size={17} />}{downloading ? 'Preparing download…' : 'Download original'}</button>}</div>
         {downloadError && <p role="alert" className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-800">{downloadError}</p>}
+        <DocumentPropertiesEditor document={document} csrf={csrf} onSaved={setDocument} />
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-stone-200 bg-white"><div className="border-b border-stone-200 px-6 py-4"><h2 className="text-sm font-semibold">Original file preview</h2></div><FilePreview document={document} /></section>
           <aside className="rounded-2xl border border-stone-200 bg-white p-6"><h2 className="font-semibold">About this record</h2><p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-stone-600">{document.description || 'No description has been added.'}</p><dl className="mt-6 space-y-5 border-t border-stone-100 pt-6 text-sm">{[
