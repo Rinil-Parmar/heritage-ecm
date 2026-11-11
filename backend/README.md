@@ -101,7 +101,7 @@ The current step has not been live-verified against an authenticated VM session.
 
 ## Next increment
 
-Expand metadata editing, search, and cabinet browsing through the same
+Expand search and cabinet browsing through the same
 per-user permission boundary. Never use a shared administrator token.
 
 ## Upload with metadata
@@ -149,6 +149,27 @@ the created record and verify its metadata and file. Use **Refresh record** if
 processing has not attached the file yet. Repeat with a restricted account and
 a rejected metadata value; verify metadata-only retry does not create another
 document. Progress measures browser-to-FastAPI transfer, not OCR completion.
+
+## Edit metadata on existing records
+
+Open a document and select **Edit metadata**. The editor reloads current values
+and the current document-type field definitions before editing. Save uses the
+CSRF-protected `PUT /api/v1/records/{id}/metadata` endpoint with the user's token.
+The backend checks required fields and allowed metadata IDs, patches existing
+entries, and adds only missing entries. Optional values may be cleared if Mayan's
+validation permits it; metadata entries are not deleted. Upload completion keeps
+its previous blank-value behavior to preserve platform defaults.
+
+Mayan enforces metadata add/edit permissions and field validators. Individual
+writes are not an atomic multi-field transaction: partial failures are reported.
+Reload current values before retrying an interrupted save. This first editor does
+not provide concurrent-edit conflict detection. The file, tags, and cabinets are
+unchanged. Fields no longer assigned to the document type remain visible in the
+read-only view and are not edited here.
+
+Manual review: edit one field, save, reload the record; cancel a separate edit;
+try leaving required metadata blank; test an optional blank and restricted-user
+save. This increment was not run through automated tests or browser verification.
 
 ## Tags and cabinets during upload
 

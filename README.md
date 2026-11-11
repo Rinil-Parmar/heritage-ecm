@@ -40,6 +40,7 @@ is documented in [backend/README.md](backend/README.md). Local sign-in, sessions
 the paginated document library, record details, previews, and original-file
 downloads are implemented. Upload with document-type metadata, tags, and cabinet
 assignments is available for manual review; search and cabinet browsing follow next.
+Existing-record metadata editing is also available for manual review.
 
 Access ECM content through supported APIs. Avoid direct writes to its database
 and duplicated document storage in a separate application.

@@ -35,6 +35,8 @@ Upload includes searchable multi-selects for existing tags and cabinets, with
 cabinet paths, optional selections, and retry of incomplete assignments on the
 same record. The detail page shows tags/cabinets returned for the current user.
 Search across documents and standalone cabinet browsing follow later.
+Existing records now include **Edit metadata** with current-value loading,
+required-field validation, save/cancel, and partial-save error handling.
 API tokens are never stored in localStorage or returned to React. The browser
 holds an HttpOnly session cookie, and CSRF state stays in component memory.
 

@@ -53,7 +53,7 @@ function FilePreview({ document }: { document: DocumentDetail }) {
     : <div className="flex min-h-80 items-center justify-center bg-stone-100 p-5"><img src={url} alt={document.label || 'Document preview'} onError={() => setError('This image could not be displayed. Download the original instead.')} className="max-h-[70vh] max-w-full object-contain" /></div>
 }
 
-export function DocumentDetailPanel({ id }: { id: number }) {
+export function DocumentDetailPanel({ id, csrf }: { id: number; csrf: string }) {
   const navigate = useNavigate()
   const [document, setDocument] = useState<DocumentDetail | null>(null)
   const [error, setError] = useState('')
@@ -114,7 +114,7 @@ export function DocumentDetailPanel({ id }: { id: number }) {
             ['Record identifier', document.uuid || String(document.id)],
           ].map(([label, value]) => <div key={label}><dt className="text-xs text-stone-500">{label}</dt><dd className="mt-1 break-words">{value}</dd></div>)}</dl></aside>
         </div>
-        <RecordMetadata key={attempt} id={document.id} />
+        <RecordMetadata key={attempt} id={document.id} typeId={document.document_type?.id} csrf={csrf} />
         <RecordOrganization key={`organization-${attempt}`} id={document.id} />
       </>}
   </div>

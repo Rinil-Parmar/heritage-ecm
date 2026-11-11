@@ -165,16 +165,18 @@ async def read_metadata(request: Request, document_id: int):
                          "value": row["value"]} for row in rows]}
 
 
-async def save_values(request: Request, document_id: int, values: dict[str, str], fields: list):
+async def save_values(request: Request, document_id: int, values: dict[str, str], fields: list, allow_empty: bool = False):
     # Reading existing entries also catches defaults created automatically by Mayan.
     existing = await all_rows(request, f"/documents/{document_id}/metadata/")
     entries = {str(row["metadata_type"]["id"]): row for row in existing}
     errors = []
     labels = {str(field["id"]): field["label"] for field in fields}
     for key, value in values.items():
-        if not value.strip():
+        if not value.strip() and not allow_empty:
             continue
         previous = entries.get(key)
+        if previous is None and not value.strip():
+            continue
         if previous and previous["value"] == value:
             continue
         path = f"/documents/{document_id}/metadata/"
@@ -197,12 +199,17 @@ class MetadataValues(OrganizationSelection):
 
 
 @router.put("/records/{document_id}/metadata", dependencies=[Depends(trusted_origin), Depends(require_write)])
-async def retry_metadata(request: Request, document_id: int, body: MetadataValues):
+async def edit_metadata(request: Request, document_id: int, body: MetadataValues):
     record = await read_detail(request, document_id)
     if not record.document_type:
         raise HTTPException(422, "This record has no document type.")
     fields = await validate_values(request, record.document_type.id, body.metadata)
-    errors = await save_values(request, document_id, body.metadata, fields)
+    try:
+        errors = await save_values(request, document_id, body.metadata, fields, allow_empty=True)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            raise
+        errors = ["Some changes may have been saved before the request failed. Review the current values before retrying."]
     return {"document_id": document_id, "metadata_saved": not errors, "errors": errors}
 
 
