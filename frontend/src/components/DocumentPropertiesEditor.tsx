@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { captureRequest } from '../api/uploads'
 import type { DocumentDetail } from '../api/documents'
 
-export function DocumentPropertiesEditor({ document, csrf, onSaved }: { document: DocumentDetail; csrf: string; onSaved: (value: DocumentDetail) => void }) {
+export function DocumentPropertiesEditor({ document, csrf, canWrite = false, onSaved }: { document: DocumentDetail; csrf: string; canWrite?: boolean; onSaved: (value: DocumentDetail) => void }) {
   const [editing, setEditing] = useState(false)
   const [label, setLabel] = useState(document.label)
   const [description, setDescription] = useState(document.description)
@@ -14,7 +14,7 @@ export function DocumentPropertiesEditor({ document, csrf, onSaved }: { document
   const inputClass = 'mt-2 w-full rounded-lg border border-stone-300 bg-white px-3 py-3 text-sm focus:outline-2 focus:outline-emerald-700'
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (busy) return
+    if (busy || !canWrite) return
     setBusy(true); setError('')
     try {
       const result = await captureRequest<DocumentDetail>(`records/${document.id}/properties`, {
@@ -26,9 +26,9 @@ export function DocumentPropertiesEditor({ document, csrf, onSaved }: { document
     finally { setBusy(false) }
   }
   return <section className="mb-6 rounded-2xl border border-stone-200 bg-white p-6">
-    <div className="flex items-center justify-between gap-4"><h2 className="font-semibold">Document details</h2>{!editing && <button className="rounded-lg border border-stone-300 px-3 py-2 text-sm" onClick={() => { setLabel(document.label); setDescription(document.description); setLanguage(document.language); setError(''); setSaved(false); setEditing(true) }}>Edit details</button>}</div>
+    <div className="flex items-center justify-between gap-4"><h2 className="font-semibold">Document details</h2>{canWrite && !editing && <button className="rounded-lg border border-stone-300 px-3 py-2 text-sm" onClick={() => { setLabel(document.label); setDescription(document.description); setLanguage(document.language); setError(''); setSaved(false); setEditing(true) }}>Edit details</button>}</div>
     {saved && <p role="status" className="mt-3 text-sm text-emerald-800">Document details saved.</p>}
-    {editing && <form onSubmit={submit} className="mt-5"><fieldset disabled={busy} className="space-y-4"><legend className="sr-only">Edit document details</legend>
+    {canWrite && editing && <form onSubmit={submit} className="mt-5"><fieldset disabled={busy} className="space-y-4"><legend className="sr-only">Edit document details</legend>
       <label className="block text-sm font-medium">Title<input required maxLength={255} value={label} onChange={event => setLabel(event.target.value)} className={inputClass} /></label>
       <label className="block text-sm font-medium">Description<textarea maxLength={10000} rows={4} value={description} onChange={event => setDescription(event.target.value)} className={inputClass} /></label>
       <label className="block text-sm font-medium">Document language<select required value={language} onChange={event => setLanguage(event.target.value)} className={inputClass}>{!languages.some(item => item.code === language) && <option value={language}>{language || 'Select a language'}</option>}{languages.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>

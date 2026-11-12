@@ -8,7 +8,7 @@ function formattedDate(value: string) {
   return Number.isNaN(parsed.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(parsed)
 }
 
-export function DocumentVersions({ id, csrf }: { id: number; csrf: string }) {
+export function DocumentVersions({ id, csrf, canWrite = false }: { id: number; csrf: string; canWrite?: boolean }) {
   const [versions, setVersions] = useState<DocumentVersion[] | null>(null)
   const [error, setError] = useState('')
   const [reload, setReload] = useState(0)
@@ -40,7 +40,7 @@ export function DocumentVersions({ id, csrf }: { id: number; csrf: string }) {
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (!file || busy || uncertain) return
+    if (!canWrite || !file || busy || uncertain) return
     if (!file.size || file.size > 50 * 1024 * 1024) { setError('Choose a non-empty file up to 50 MB.'); return }
     setBusy(true)
     setError('')
@@ -64,10 +64,10 @@ export function DocumentVersions({ id, csrf }: { id: number; csrf: string }) {
   return <section className="mt-6 rounded-2xl border border-stone-200 bg-white p-6 sm:p-8" aria-labelledby="version-history-heading">
     <div className="flex flex-wrap items-center justify-between gap-4">
       <div><h2 id="version-history-heading" className="font-semibold">Version history</h2><p className="mt-2 text-sm leading-6 text-stone-500">Keep earlier record states available while the active file evolves.</p></div>
-      <div className="flex gap-2"><button onClick={() => setReload(value => value + 1)} disabled={busy} className="inline-flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-sm font-medium hover:bg-stone-50 disabled:opacity-50"><RefreshCw aria-hidden size={15} />Refresh</button><button onClick={() => { setShowUpload(value => !value); setError(''); setUncertain(false) }} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#233b33] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Upload aria-hidden size={15} />Upload new version</button></div>
+      <div className="flex gap-2"><button onClick={() => setReload(value => value + 1)} disabled={busy} className="inline-flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-sm font-medium hover:bg-stone-50 disabled:opacity-50"><RefreshCw aria-hidden size={15} />Refresh</button>{canWrite && <button onClick={() => { setShowUpload(value => !value); setError(''); setUncertain(false) }} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#233b33] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Upload aria-hidden size={15} />Upload new version</button>}</div>
     </div>
 
-    {showUpload && <form onSubmit={submit} className="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-5">
+    {canWrite && showUpload && <form onSubmit={submit} className="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-5">
       <h3 className="text-sm font-semibold">Add a replacement file</h3><p className="mt-2 text-xs leading-5 text-stone-500">This becomes the active version after processing. Earlier versions stay in the record history.</p>
       <label htmlFor="version-file" className="mt-5 block text-sm font-medium">Replacement file <span className="text-red-700">*</span><input id="version-file" type="file" required disabled={busy || uncertain} onChange={event => setFile(event.target.files?.[0] || null)} className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-[#233b33] file:px-3 file:py-2 file:text-white" /></label>
       <label htmlFor="version-comment" className="mt-4 block text-sm font-medium">Change summary <span className="text-red-700">*</span><textarea id="version-comment" required minLength={3} maxLength={255} rows={3} disabled={busy || uncertain} value={comment} onChange={event => setComment(event.target.value)} placeholder="What changed in this version?" className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-3 py-3 text-sm outline-none focus:border-[#365d4d]" /></label>

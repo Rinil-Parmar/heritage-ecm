@@ -1,0 +1,33 @@
+services:
+  api:
+    image: archeoecm-api:${APP_RELEASE:?Set APP_RELEASE to the commit SHA}
+    env_file:
+      - ${APP_ENV_FILE:?Set APP_ENV_FILE to the VM environment file}
+    restart: unless-stopped
+    init: true
+    mem_limit: 768m
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/v1/health', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  web:
+    image: archeoecm-web:${APP_RELEASE:?Set APP_RELEASE to the commit SHA}
+    ports:
+      - 127.0.0.1:8082:80
+    depends_on:
+      api: {condition: service_healthy}
+    restart: unless-stopped
+    mem_limit: 128m
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1/portal/]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}

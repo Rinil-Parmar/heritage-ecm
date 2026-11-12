@@ -18,6 +18,7 @@ export interface DocumentPage {
 }
 
 export interface DocumentFilters {
+  tagId?: number
   cabinetId?: number
   query?: string
   documentTypeId?: number
@@ -61,6 +62,7 @@ export async function getDocumentFile(id: number, preview: boolean, signal?: Abo
 
 export async function listDocuments(page: number, filters: DocumentFilters = {}, signal?: AbortSignal): Promise<DocumentPage> {
   const params = new URLSearchParams({ page: String(page) })
+  if (filters.tagId) params.set('tag_id', String(filters.tagId))
   if (filters.cabinetId) params.set('cabinet_id', String(filters.cabinetId))
   if (filters.query) params.set('query', filters.query)
   if (filters.documentTypeId) params.set('document_type_id', String(filters.documentTypeId))

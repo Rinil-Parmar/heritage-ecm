@@ -15,6 +15,7 @@ export function DocumentsPanel() {
   const [searchParams, setSearchParams] = useSearchParams()
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
   const filters: DocumentFilters = {
+    tagId: Number(searchParams.get('tag')) || undefined,
     cabinetId: Number(searchParams.get('cabinet')) || undefined,
     query: searchParams.get('q')?.trim() || undefined,
     documentTypeId: Number(searchParams.get('type')) || undefined,
@@ -56,11 +57,12 @@ export function DocumentsPanel() {
       }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [page, filters.cabinetId, filters.query, filters.documentTypeId, filters.createdFrom, filters.createdTo, refresh, navigate])
+  }, [page, filters.tagId, filters.cabinetId, filters.query, filters.documentTypeId, filters.createdFrom, filters.createdTo, refresh, navigate])
 
   function applyFilters(event: FormEvent) {
     event.preventDefault()
     const next = new URLSearchParams()
+    if (filters.tagId) next.set('tag', String(filters.tagId))
     if (filters.cabinetId) next.set('cabinet', String(filters.cabinetId))
     if (draftQuery.trim()) next.set('q', draftQuery.trim())
     if (draftType) next.set('type', draftType)
@@ -74,7 +76,10 @@ export function DocumentsPanel() {
     setDraftType('')
     setDraftFrom('')
     setDraftTo('')
-    setSearchParams(filters.cabinetId ? new URLSearchParams({ cabinet: String(filters.cabinetId) }) : new URLSearchParams())
+    const next = new URLSearchParams()
+    if (filters.tagId) next.set('tag', String(filters.tagId))
+    if (filters.cabinetId) next.set('cabinet', String(filters.cabinetId))
+    setSearchParams(next)
   }
 
   function goToPage(nextPage: number) {
@@ -86,6 +91,7 @@ export function DocumentsPanel() {
 
   return (
     <div>
+      {filters.tagId && <p className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">Browsing tagged documents. Search and filters apply within this collection. <Link to="/app/tags" className="ml-2 font-semibold underline">Browse tags</Link></p>}
       {filters.cabinetId && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">Browsing cabinet #{filters.cabinetId}. Search applies inside this folder. <Link to="/app" className="ml-2 font-semibold underline">All documents</Link></p>}
       <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
         <div>

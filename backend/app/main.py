@@ -9,6 +9,9 @@ from app.sessions import SessionStore
 from app.documents import router as documents_router
 from app.uploads import router as uploads_router
 from app.versions import router as versions_router
+from app.administration import router as administration_router
+from app.activity import router as activity_router
+from app.capabilities import router as capabilities_router
 
 
 class HealthResponse(BaseModel):
@@ -23,6 +26,9 @@ app.include_router(router)
 app.include_router(documents_router)
 app.include_router(uploads_router)
 app.include_router(versions_router)
+app.include_router(administration_router)
+app.include_router(activity_router)
+app.include_router(capabilities_router)
 
 
 @app.exception_handler(RequestValidationError)

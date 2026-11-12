@@ -266,6 +266,33 @@ class RecordProperties(BaseModel):
     language: str = Field(min_length=1, max_length=16)
 
 
+class CommentInput(BaseModel):
+    text: str = Field(min_length=1, max_length=10000)
+
+
+@router.get('/records/{document_id}/comments')
+async def record_comments(request: Request, document_id: int):
+    if document_id < 1:
+        raise HTTPException(404, 'Record not found.')
+    rows = await all_rows(request, f'/documents/{document_id}/comments/')
+    return {'results': [{'id': row['id'], 'text': row['text'], 'submit_date': row['submit_date'],
+                         'author': (row.get('user') or {}).get('username', 'Unknown user')} for row in rows]}
+
+
+@router.post('/records/{document_id}/comments', status_code=201, dependencies=[Depends(trusted_origin), Depends(require_write)])
+async def add_comment(request: Request, document_id: int, body: CommentInput):
+    if document_id < 1:
+        raise HTTPException(404, 'Record not found.')
+    if not body.text.strip():
+        raise HTTPException(422, 'Enter a comment.')
+    response = await call(request, 'POST', f'/documents/{document_id}/comments/', json={'text': body.text.strip()})
+    if response.status_code == 400:
+        raise HTTPException(422, 'The comment was rejected. Check its length and content.')
+    if response.status_code != 201:
+        check_upstream(request, response.status_code)
+    return {'saved': True}
+
+
 class PropertyUpdate(BaseModel):
     values: RecordProperties
     original: RecordProperties
