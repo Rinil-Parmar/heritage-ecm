@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Archive, ArrowUpRight } from 'lucide-react'
 
 const SIGN_IN_URL = '/sign-in'
@@ -22,13 +23,13 @@ export function SiteHeader() {
           <a className="transition hover:text-white" href="#value">Why ArcheoECM</a>
         </nav>
 
-        <a
+        <Link
           className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300"
-          href={SIGN_IN_URL}
+          to={SIGN_IN_URL}
         >
           Sign in
           <ArrowUpRight aria-hidden="true" size={16} />
-        </a>
+        </Link>
       </div>
     </header>
   )
