@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import {
   ArrowRight,
   BookOpenText,
@@ -184,7 +185,7 @@ export function LandingPage() {
       <footer className="border-t border-stone-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-sm text-stone-500 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
           <p><span className="font-semibold text-stone-800">ArcheoECM</span> · Heritage document management</p>
-          <a className="font-medium text-stone-600 transition hover:text-stone-950" href={SIGN_IN_URL}>Organization sign in</a>
+          <Link className="font-medium text-stone-600 transition hover:text-stone-950" to={SIGN_IN_URL}>Organization sign in</Link>
         </div>
       </footer>
     </div>
