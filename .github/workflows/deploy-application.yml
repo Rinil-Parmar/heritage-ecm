@@ -1,0 +1,61 @@
+name: Deploy ArcheoECM application
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archeoecm-application-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the selected commit
+        run: |
+          docker build -t archeoecm-api:${{ github.sha }} backend
+          docker build -t archeoecm-web:${{ github.sha }} frontend
+          mkdir bundle
+          docker save archeoecm-api:${{ github.sha }} archeoecm-web:${{ github.sha }} | gzip > bundle/images.tar.gz
+          cp infra/application/compose.yaml bundle/compose.yaml
+          cp scripts/deploy-application.sh bundle/deploy-application.sh
+          cd bundle
+          sha256sum images.tar.gz compose.yaml deploy-application.sh > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: application-${{ github.sha }}
+          path: bundle/
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy application after owner approval
+    needs: build
+    runs-on: [self-hosted, linux, x64, ecm-deploy]
+    environment:
+      # Reuses the existing owner approval gate. Verify required reviewers in Settings.
+      name: mayan-production
+      url: https://archeoecm.cs.uwindsor.ca/portal/
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: application-${{ github.sha }}
+          path: ${{ runner.temp }}/application-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Load and deploy approved images
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          BUNDLE: ${{ runner.temp }}/application-${{ github.run_id }}-${{ github.run_attempt }}
+        shell: bash
+        run: |
+          cd "$BUNDLE"
+          sha256sum --check SHA256SUMS
+          bash deploy-application.sh "$RELEASE_SHA" "$BUNDLE"

@@ -14,6 +14,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  application-build:
+    name: Build React and FastAPI images
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: docker build -t archeoecm-api:ci backend
+      - run: docker build -t archeoecm-web:ci frontend
+
   validate:
     name: Validate repository and Mayan Compose
     runs-on: ubuntu-latest
