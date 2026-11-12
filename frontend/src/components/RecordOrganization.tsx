@@ -1,4 +1,3 @@
-import type { DocumentAccess } from '../api/access'
 import { useEffect, useState } from 'react'
 import { CheckCircle2, FolderOpen, LoaderCircle, Tags } from 'lucide-react'
 import { captureRequest, type OrganizationOption } from '../api/uploads'
@@ -19,7 +18,7 @@ function AssignmentList({ items, kind }: { items: OrganizationOption[]; kind: 't
   )}</ul>
 }
 
-export function RecordOrganization({ id, csrf, access }: { id: number; csrf: string; access: DocumentAccess | null }) {
+export function RecordOrganization({ id, csrf }: { id: number; csrf: string }) {
   const [tags, setTags] = useState<OrganizationOption[] | null>(null)
   const [cabinets, setCabinets] = useState<OrganizationOption[] | null>(null)
   const [tagIds, setTagIds] = useState<number[]>([])
@@ -92,17 +91,16 @@ export function RecordOrganization({ id, csrf, access }: { id: number; csrf: str
     }
   }
 
-  const canWrite = !!access && [access.tags_add, access.tags_remove, access.cabinets_add, access.cabinets_remove].some(ids => ids.length > 0)
   const loading = tags === null || cabinets === null
   return <section aria-label="Document organization" className="mt-6 rounded-2xl border border-stone-200 bg-white p-6 sm:p-8">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div><h2 className="font-semibold">Tags and cabinets</h2><p className="mt-2 text-sm leading-6 text-stone-500">Classify the record and place it in one or more cabinet folders.</p></div>
-      {canWrite && !loading && !editing && <button onClick={() => { setEditing(true); setSaved(false); setError('') }} className="rounded-lg border border-stone-200 px-3 py-2 text-sm font-medium hover:bg-stone-50">Edit organization</button>}
+      {!loading && !editing && <button onClick={() => { setEditing(true); setSaved(false); setError('') }} className="rounded-lg border border-stone-200 px-3 py-2 text-sm font-medium hover:bg-stone-50">Edit organization</button>}
     </div>
     {saved && <p role="status" className="mt-5 flex items-center gap-2 rounded-lg bg-[#edf3ef] p-3 text-sm text-[#365d4d]"><CheckCircle2 aria-hidden size={17} />Tags and cabinets saved.</p>}
     {error && <div role="alert" className="mt-5 rounded-lg bg-red-50 p-4 text-sm leading-6 text-red-800">{error}{!editing && <button onClick={() => setAttempt(value => value + 1)} className="ml-3 underline">Reload</button>}</div>}
-    {loading && !error ? <p role="status" className="mt-5 text-sm text-stone-500">Loading tags and cabinets…</p> : !loading && editing && canWrite ? <div className="mt-6">
-      <div className="grid gap-5 md:grid-cols-2"><OrganizationPicker kind="tags" allowedAdd={access?.tags_add || []} allowedRemove={access?.tags_remove || []} selected={tagIds} onChange={setTagIds} disabled={busy} /><OrganizationPicker kind="cabinets" allowedAdd={access?.cabinets_add || []} allowedRemove={access?.cabinets_remove || []} selected={cabinetIds} onChange={setCabinetIds} disabled={busy} /></div>
+    {loading && !error ? <p role="status" className="mt-5 text-sm text-stone-500">Loading tags and cabinets…</p> : !loading && editing ? <div className="mt-6">
+      <div className="grid gap-5 md:grid-cols-2"><OrganizationPicker kind="tags" selected={tagIds} onChange={setTagIds} disabled={busy} /><OrganizationPicker kind="cabinets" selected={cabinetIds} onChange={setCabinetIds} disabled={busy} /></div>
       <div className="mt-5 flex flex-wrap gap-3"><button onClick={save} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#233b33] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy && <LoaderCircle aria-hidden size={15} className="animate-spin" />}{busy ? 'Saving…' : 'Save organization'}</button><button onClick={() => { setEditing(false); setTagIds(originalTagIds); setCabinetIds(originalCabinetIds); setError('') }} disabled={busy} className="px-3 py-2.5 text-sm font-medium">Cancel</button></div>
     </div> : !loading && <div className="mt-6 grid gap-7 sm:grid-cols-2"><div><h3 className="flex items-center gap-2 text-sm font-semibold"><Tags aria-hidden size={17} />Tags</h3><AssignmentList items={tags} kind="tags" /></div><div><h3 className="flex items-center gap-2 text-sm font-semibold"><FolderOpen aria-hidden size={17} />Cabinets / folders</h3><AssignmentList items={cabinets} kind="cabinets" /></div></div>}
   </section>
