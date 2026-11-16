@@ -213,7 +213,7 @@ async def assigned_queue(request: Request, username: str):
                 reason = (
                     "Document access is missing. Ask an administrator to grant the Research Professor role Reviewer access."
                     if exc.status_code == 404 else
-                    "Workflow access is missing. Ask an administrator to grant the Research Professor role Reviewer access."
+                    "Workflow visibility is missing. Ask an administrator to reapply the Research Professor role Reviewer access."
                 )
                 blocked.append({
                     "document_id": document_id, "label": f"Document {document_id}",
