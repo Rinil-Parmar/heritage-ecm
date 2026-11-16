@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { Archive, ArrowUpRight, FileCheck2, Files, LogOut, Users } from 'lucide-react'
+import { Archive, FileCheck2, Files, LayoutDashboard, LogOut, Sparkles, Users } from 'lucide-react'
 import { getSession, signOut, type Session } from '../api/auth'
 import { ApiError } from '../api/client'
 import { DocumentsPanel } from '../components/DocumentsPanel'
@@ -11,6 +11,8 @@ import { TagLibrary } from '../components/TagLibrary'
 import { UserAdministration } from '../components/UserAdministration'
 import { captureRequest } from '../api/uploads'
 import { ReviewQueue } from '../components/ReviewQueue'
+import { SmartSearch } from '../components/SmartSearch'
+import { OperationsDashboard } from '../components/OperationsDashboard'
 
 export function ApplicationPage() {
   const navigate = useNavigate()
@@ -19,8 +21,10 @@ export function ApplicationPage() {
   const usersPage = location.pathname === '/app/users'
   const tagsPage = location.pathname === '/app/tags'
   const reviewsPage = location.pathname === '/app/reviews'
+  const smartSearchPage = location.pathname === '/app/smart-search'
+  const dashboardPage = location.pathname === '/app/dashboard'
   const tagsActive = tagsPage || new URLSearchParams(location.search).has('tag')
-  const documentsActive = !usersPage && !reviewsPage && !tagsActive && !new URLSearchParams(location.search).has('cabinet')
+  const documentsActive = !dashboardPage && !usersPage && !reviewsPage && !smartSearchPage && !tagsActive && !new URLSearchParams(location.search).has('cabinet')
   const [session, setSession] = useState<Session | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -80,9 +84,11 @@ export function ApplicationPage() {
         <p className="mt-2 pl-9 text-xs text-stone-300">Research &amp; heritage</p>
         <div className="sidebar-scroll mt-6 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2 pb-3">
         <nav aria-label="Application navigation">
+          <Link to="/app/dashboard" aria-current={dashboardPage ? 'page' : undefined} className={`mb-5 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium ${dashboardPage ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}><LayoutDashboard aria-hidden size={18} />My work</Link>
           <p className="mb-3 px-3 text-[0.65rem] font-semibold tracking-[0.2em] text-stone-400 uppercase">Library</p>
           <Link to="/app" aria-current={documentsActive ? 'page' : undefined} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium ${documentsActive ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}><Files aria-hidden size={18} />Documents</Link>
           <Link to="/app/reviews" aria-current={reviewsPage ? 'page' : undefined} className={`mt-2 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium ${reviewsPage ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}><FileCheck2 aria-hidden size={18} />Review queue</Link>
+          <Link to="/app/smart-search" aria-current={smartSearchPage ? 'page' : undefined} className={`mt-2 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium ${smartSearchPage ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}><Sparkles aria-hidden size={18} />Smart search</Link>
         </nav>
         <Link to="/app/tags" aria-current={tagsActive ? 'page' : undefined} className={`mt-2 block rounded-xl px-4 py-3 text-sm font-medium ${tagsActive ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}>Tags</Link>
         {adminAllowed && <nav aria-label="Administration" className="mt-5"><p className="mb-2 px-3 text-[0.65rem] font-semibold tracking-[0.2em] text-stone-400 uppercase">Administration</p><Link to="/app/users" aria-current={usersPage ? 'page' : undefined} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium ${usersPage ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}><Users aria-hidden size={18} />Manage users</Link></nav>}
@@ -92,13 +98,13 @@ export function ApplicationPage() {
       </aside>
       <div className="min-w-0">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 bg-white px-6 py-4 sm:px-10">
-          <p className="text-sm text-stone-500">{usersPage ? 'Administration' : 'Library'} <span aria-hidden className="mx-2 text-stone-300">/</span><span className="font-medium text-stone-800">{usersPage ? 'Manage users' : reviewsPage ? 'Review queue' : tagsPage ? 'Tags' : location.pathname === '/app/upload' ? 'Upload document' : 'Documents'}</span></p>
+          <p className="text-sm text-stone-500">{usersPage ? 'Administration' : dashboardPage ? 'Workspace' : 'Library'} <span aria-hidden className="mx-2 text-stone-300">/</span><span className="font-medium text-stone-800">{usersPage ? 'Manage users' : dashboardPage ? 'My work' : smartSearchPage ? 'Smart search' : reviewsPage ? 'Review queue' : tagsPage ? 'Tags' : location.pathname === '/app/upload' ? 'Upload document' : 'Documents'}</span></p>
           {session && <div className="flex items-center gap-4"><span className="max-w-40 truncate text-sm text-stone-600" title={session.username}>{session.username}</span><button onClick={logout} disabled={busy} className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-xs font-medium hover:bg-stone-50 focus-visible:outline-2 disabled:opacity-60"><LogOut aria-hidden size={15} />{busy ? 'Signing out…' : 'Sign out'}</button></div>}
         </header>
       <main className="mx-auto max-w-7xl px-6 py-9 sm:px-10 sm:py-12">
         {error && <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}{!session && <button onClick={() => setAttempt(attempt + 1)} className="ml-4 underline">Try again</button>}</div>}
         {!session && !error && <p role="status">Checking your session…</p>}
-        {session && (reviewsPage ? <ReviewQueue /> : tagsPage ? <TagLibrary /> : location.pathname === '/app/users' ? (adminAllowed ? <UserAdministration csrf={session.csrf_token} /> : <p>Account administration is unavailable for this account.</p>) : location.pathname === '/app/upload' ? <UploadPanel csrf={session.csrf_token} /> : documentId ? <DocumentDetailPanel key={documentId} id={Number(documentId)} csrf={session.csrf_token} /> : <DocumentsPanel />)}
+        {session && (dashboardPage ? <OperationsDashboard username={session.username} adminAllowed={adminAllowed} /> : smartSearchPage ? <SmartSearch csrf={session.csrf_token} /> : reviewsPage ? <ReviewQueue /> : tagsPage ? <TagLibrary /> : location.pathname === '/app/users' ? (adminAllowed ? <UserAdministration csrf={session.csrf_token} /> : <p>Account administration is unavailable for this account.</p>) : location.pathname === '/app/upload' ? <UploadPanel csrf={session.csrf_token} /> : documentId ? <DocumentDetailPanel key={documentId} id={Number(documentId)} csrf={session.csrf_token} /> : <DocumentsPanel />)}
       </main>
       </div>
     </div>

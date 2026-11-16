@@ -17,12 +17,15 @@ class SessionStore:
     def __init__(self):
         self.sessions: dict[str, Session] = {}
         self.attempts: dict[str, list[float]] = {}
+        self.ai_attempts: dict[str, list[float]] = {}
 
     def prune(self):
         now = time.monotonic()
         self.sessions = {k: v for k, v in self.sessions.items() if v.expires > now}
         self.attempts = {k: [t for t in v if now - t < 60] for k, v in self.attempts.items()}
         self.attempts = {k: v for k, v in self.attempts.items() if v}
+        self.ai_attempts = {k: [t for t in v if now - t < 86400] for k, v in self.ai_attempts.items()}
+        self.ai_attempts = {k: v for k, v in self.ai_attempts.items() if v}
 
     def allow_login(self, key: str) -> bool:
         self.prune()
@@ -32,6 +35,18 @@ class SessionStore:
         if len(attempts) >= 10:
             return False
         attempts.append(time.monotonic())
+        return True
+
+    def allow_ai_search(self, key: str, minute_limit: int, daily_limit: int) -> bool:
+        """Bound provider-backed searches per user in this single API process."""
+        self.prune()
+        if key not in self.ai_attempts and len(self.ai_attempts) >= 1000:
+            return False
+        now = time.monotonic()
+        attempts = self.ai_attempts.setdefault(key, [])
+        if len(attempts) >= daily_limit or sum(now - value < 60 for value in attempts) >= minute_limit:
+            return False
+        attempts.append(now)
         return True
 
     def create(self, username: str, token: str, ttl: int) -> tuple[str, Session]:

@@ -13,6 +13,7 @@ from app.administration import router as administration_router
 from app.activity import router as activity_router
 from app.capabilities import router as capabilities_router
 from app.workflows import queue_router as review_queue_router, router as workflows_router
+from app.smart_search import router as smart_search_router
 
 
 class HealthResponse(BaseModel):
@@ -32,6 +33,7 @@ app.include_router(activity_router)
 app.include_router(capabilities_router)
 app.include_router(workflows_router)
 app.include_router(review_queue_router)
+app.include_router(smart_search_router)
 
 
 @app.exception_handler(RequestValidationError)

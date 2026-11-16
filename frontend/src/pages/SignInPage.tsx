@@ -16,7 +16,7 @@ export function SignInPage() {
   useEffect(() => {
     let active = true
     getSession().then(() => {
-      if (active) navigate('/app', { replace: true })
+      if (active) navigate('/app/dashboard', { replace: true })
     }).catch(cause => {
       if (!active) return
       // An absent/expired session is expected; service errors should remain visible.
@@ -36,7 +36,7 @@ export function SignInPage() {
     try {
       await signIn(username.trim(), password)
       setPassword('')
-      navigate('/app', { replace: true })
+      navigate('/app/dashboard', { replace: true })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to sign in. Please try again.')
       setPassword('')
