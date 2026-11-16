@@ -44,10 +44,12 @@ async def call(request: Request, method: str, path: str, **kwargs):
             await client.aclose()
 
 
-async def all_rows(request: Request, path: str):
+async def all_rows(request: Request, path: str, permission_detail: str | None = None):
     rows = []
     for page in range(1, 101):
         response = await call(request, "GET", path, params={"page": page})
+        if permission_detail and response.status_code in (403, 404):
+            raise HTTPException(403, permission_detail)
         check_upstream(request, response.status_code)
         try:
             data = response.json()
@@ -196,8 +198,20 @@ async def save_organization(request: Request, document_id: int, selection: Organ
 async def record_organization(request: Request, document_id: int, kind: str):
     if kind not in ("tags", "cabinets") or document_id < 1:
         raise HTTPException(404, "Not found.")
-    rows = await all_rows(request, f"/documents/{document_id}/{kind}/")
-    return {"results": tag_rows(rows) if kind == "tags" else assigned_cabinet_rows(rows)}
+    await read_detail(request, document_id)
+    try:
+        rows = await all_rows(
+            request, f"/documents/{document_id}/{kind}/",
+            f"Your account cannot view this document's {kind}.",
+        )
+    except HTTPException as exc:
+        if exc.status_code == 403:
+            return {"results": [], "restricted": True}
+        raise
+    return {
+        "results": tag_rows(rows) if kind == "tags" else assigned_cabinet_rows(rows),
+        "restricted": False,
+    }
 
 
 class OrganizationUpdate(OrganizationSelection):
@@ -282,7 +296,11 @@ class CommentInput(BaseModel):
 async def record_comments(request: Request, document_id: int):
     if document_id < 1:
         raise HTTPException(404, 'Record not found.')
-    rows = await all_rows(request, f'/documents/{document_id}/comments/')
+    await read_detail(request, document_id)
+    rows = await all_rows(
+        request, f'/documents/{document_id}/comments/',
+        "Your account cannot view this document's comments.",
+    )
     return {'results': [{'id': row['id'], 'text': row['text'], 'submit_date': row['submit_date'],
                          'author': (row.get('user') or {}).get('username', 'Unknown user')} for row in rows]}
 
