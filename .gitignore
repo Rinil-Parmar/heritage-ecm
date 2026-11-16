@@ -22,6 +22,7 @@ __pycache__/
 
 # Local runtime data and generated output
 /data/
+/backend/data/
 /backups/
 /uploads/
 /tmp/

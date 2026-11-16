@@ -1,3 +1,6 @@
+from contextlib import asynccontextmanager
+
+import httpx
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -14,6 +17,8 @@ from app.activity import router as activity_router
 from app.capabilities import router as capabilities_router
 from app.workflows import queue_router as review_queue_router, router as workflows_router
 from app.smart_search import router as smart_search_router
+from app.notifications import router as notifications_router
+from app.access_control import router as access_control_router
 
 
 class HealthResponse(BaseModel):
@@ -21,8 +26,23 @@ class HealthResponse(BaseModel):
     service: str
 
 
-app = FastAPI(title="ArcheoECM API", version="0.1.0")
-app.state.settings = Settings()
+settings = Settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.upstream_http = httpx.AsyncClient(
+        timeout=settings.request_timeout, follow_redirects=False,
+        limits=httpx.Limits(max_connections=40, max_keepalive_connections=20),
+    )
+    try:
+        yield
+    finally:
+        await app.state.upstream_http.aclose()
+
+
+app = FastAPI(title="ArcheoECM API", version="0.1.0", lifespan=lifespan)
+app.state.settings = settings
 app.state.sessions = SessionStore()
 app.include_router(router)
 app.include_router(documents_router)
@@ -34,6 +54,8 @@ app.include_router(capabilities_router)
 app.include_router(workflows_router)
 app.include_router(review_queue_router)
 app.include_router(smart_search_router)
+app.include_router(notifications_router)
+app.include_router(access_control_router)
 
 
 @app.exception_handler(RequestValidationError)

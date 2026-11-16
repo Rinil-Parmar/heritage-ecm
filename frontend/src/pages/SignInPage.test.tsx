@@ -14,7 +14,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks() })
 function setup() {
   render(<MemoryRouter initialEntries={['/sign-in']}><Routes>
     <Route path="/sign-in" element={<SignInPage />} />
-    <Route path="/app" element={<p>Account connected</p>} />
+    <Route path="/app/dashboard" element={<p>Account connected</p>} />
   </Routes></MemoryRouter>)
   return userEvent.setup()
 }

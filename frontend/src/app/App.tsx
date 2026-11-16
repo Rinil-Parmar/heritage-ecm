@@ -11,6 +11,7 @@ export function App() {
       <Route path="/app" element={<ApplicationPage />} />
       <Route path="/app/dashboard" element={<ApplicationPage />} />
       <Route path="/app/users" element={<ApplicationPage />} />
+      <Route path="/app/access" element={<ApplicationPage />} />
       <Route path="/app/tags" element={<ApplicationPage />} />
       <Route path="/app/reviews" element={<ApplicationPage />} />
       <Route path="/app/smart-search" element={<ApplicationPage />} />

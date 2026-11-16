@@ -34,7 +34,28 @@ export interface ReviewQueueItem {
   datetime_created: string | null
   document_type: { id: number; label: string } | null
   state: WorkflowState
+  workflow_instance_id: number
+  assignment: ReviewAssignment | null
   last_action: { label: string; datetime: string | null; actor: string } | null
+}
+
+export interface ReviewAssignment {
+  workflow_instance_id: number
+  document_id: number
+  assignee_username: string
+  assigned_by: string
+  priority: 'normal' | 'high' | 'urgent'
+  due_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ReviewAssignee { id: number; username: string; label: string }
+export interface BlockedReview {
+  document_id: number
+  label: string
+  reason: string
+  assignment: ReviewAssignment
 }
 
 export function getWorkflows(documentId: number, signal?: AbortSignal) {
@@ -69,5 +90,28 @@ export function getReviewQueue(signal?: AbortSignal) {
   return captureRequest<{
     workflow: { id: number; label: string } | null
     results: ReviewQueueItem[]
+    blocked: BlockedReview[]
   }>('reviews/queue', { signal })
+}
+
+export function getAssignmentAccess(signal?: AbortSignal) {
+  return captureRequest<{ allowed: boolean }>('reviews/assignment-access', { signal })
+}
+
+export function getReviewAssignees(signal?: AbortSignal) {
+  return captureRequest<{ results: ReviewAssignee[] }>('reviews/assignees', { signal })
+}
+
+export function saveReviewAssignment(workflowId: number, documentId: number, assignee: string,
+  priority: ReviewAssignment['priority'], dueDate: string, csrf: string) {
+  return captureRequest<ReviewAssignment>(`reviews/assignments/${workflowId}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+    body: JSON.stringify({ document_id: documentId, assignee_username: assignee, priority, due_date: dueDate || null }),
+  })
+}
+
+export function removeReviewAssignment(workflowId: number, csrf: string) {
+  return captureRequest<{ removed: boolean }>(`reviews/assignments/${workflowId}`, {
+    method: 'DELETE', headers: { 'X-CSRF-Token': csrf },
+  })
 }

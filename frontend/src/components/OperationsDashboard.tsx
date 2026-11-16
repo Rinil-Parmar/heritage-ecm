@@ -23,6 +23,7 @@ export function OperationsDashboard({ username, adminAllowed }: { username: stri
   const navigate = useNavigate()
   const [documents, setDocuments] = useState<DocumentPage | null>(null)
   const [reviews, setReviews] = useState<ReviewQueueItem[]>([])
+  const [blockedReviewCount, setBlockedReviewCount] = useState(0)
   const [searchStatus, setSearchStatus] = useState<SmartSearchStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
@@ -40,14 +41,15 @@ export function OperationsDashboard({ username, adminAllowed }: { username: stri
       if (unauthorized) { navigate('/sign-in', { replace: true }); return }
       const [documentResult, reviewResult, searchResult] = outcomes
       if (documentResult.status === 'fulfilled') setDocuments(documentResult.value)
-      if (reviewResult.status === 'fulfilled') setReviews(reviewResult.value.results)
+      if (reviewResult.status === 'fulfilled') { setReviews(reviewResult.value.results); setBlockedReviewCount(reviewResult.value.blocked?.length || 0) }
       if (searchResult.status === 'fulfilled') setSearchStatus(searchResult.value)
       if (outcomes.some(item => item.status === 'rejected')) setNotice('Some workspace information is unavailable. You can still use the available actions below.')
     }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [navigate, reload])
 
-  const corrections = useMemo(() => reviews.filter(item => item.state.label.toLowerCase().includes('correction')).length, [reviews])
+  const myReviews = useMemo(() => reviews.filter(item => item.assignment?.assignee_username === username), [reviews, username])
+  const corrections = useMemo(() => myReviews.filter(item => item.state.label.toLowerCase().includes('correction')).length, [myReviews])
   const firstName = username.split(/[.@_-]/)[0] || username
   function refreshDashboard() {
     setLoading(true)
@@ -56,7 +58,7 @@ export function OperationsDashboard({ username, adminAllowed }: { username: stri
   }
   const summary = [
     { label: 'Accessible records', value: documents?.count ?? '—', note: 'Based on your permissions', icon: FolderOpen, to: '/app' },
-    { label: 'Open reviews', value: reviews.length, note: 'Awaiting a final decision', icon: FileCheck2, to: '/app/reviews' },
+    { label: 'Assigned to me', value: myReviews.length + blockedReviewCount, note: blockedReviewCount ? `${blockedReviewCount} assignment needs access` : 'Your open review work', icon: FileCheck2, to: '/app/reviews' },
     { label: 'Needs correction', value: corrections, note: 'Returned for updates', icon: CircleAlert, to: '/app/reviews' },
     { label: 'Assisted search', value: searchStatus?.ai_enabled ? 'AI ready' : 'Standard', note: searchStatus?.ai_enabled ? 'Secure interpretation active' : 'Keyword interpretation active', icon: Bot, to: '/app/smart-search' },
   ]
@@ -84,8 +86,8 @@ export function OperationsDashboard({ username, adminAllowed }: { username: stri
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-4 border-b border-stone-200 px-6 py-5"><div><h2 className="font-semibold">Priority review work</h2><p className="mt-1 text-xs text-stone-500">Corrections appear first</p></div><Link to="/app/reviews" className="text-xs font-semibold text-[#365d4d] hover:underline">Open queue</Link></div>
-        {loading && !reviews.length ? <div className="space-y-3 p-6">{[1, 2, 3].map(item => <div key={item} className="h-14 animate-pulse rounded-xl bg-stone-100" />)}</div> : !reviews.length ? <div className="px-6 py-12 text-center"><FileCheck2 aria-hidden size={32} className="mx-auto text-stone-400" /><p className="mt-3 text-sm font-medium">No open review work</p><p className="mt-1 text-xs text-stone-500">Your active workflow items will appear here.</p></div> : <ul className="divide-y divide-stone-100">{reviews.slice(0, 5).map(item => <li key={item.id}><Link to={`/app/documents/${item.id}`} className="block px-6 py-4 hover:bg-stone-50"><div className="flex items-center justify-between gap-3"><span className="truncate text-sm font-semibold">{item.label}</span><span className={`shrink-0 rounded-full px-2.5 py-1 text-[0.68rem] font-semibold ${stateClass(item.state.label)}`}>{item.state.label}</span></div><p className="mt-2 text-xs text-stone-500">{item.document_type?.label || 'Document'} · {item.state.completion}% complete</p></Link></li>)}</ul>}
+        <div className="flex items-center justify-between gap-4 border-b border-stone-200 px-6 py-5"><div><h2 className="font-semibold">My assigned reviews</h2><p className="mt-1 text-xs text-stone-500">Corrections appear first</p></div><Link to="/app/reviews" className="text-xs font-semibold text-[#365d4d] hover:underline">Open queue</Link></div>
+        {loading && !reviews.length ? <div className="space-y-3 p-6">{[1, 2, 3].map(item => <div key={item} className="h-14 animate-pulse rounded-xl bg-stone-100" />)}</div> : !myReviews.length ? <div className="px-6 py-12 text-center"><FileCheck2 aria-hidden size={32} className="mx-auto text-stone-400" /><p className="mt-3 text-sm font-medium">No reviews assigned to you</p><p className="mt-1 text-xs text-stone-500">New assignments will appear here and in notifications.</p></div> : <ul className="divide-y divide-stone-100">{myReviews.slice(0, 5).map(item => <li key={item.id}><Link to={`/app/documents/${item.id}`} className="block px-6 py-4 hover:bg-stone-50"><div className="flex items-center justify-between gap-3"><span className="truncate text-sm font-semibold">{item.label}</span><span className={`shrink-0 rounded-full px-2.5 py-1 text-[0.68rem] font-semibold ${stateClass(item.state.label)}`}>{item.state.label}</span></div><p className="mt-2 text-xs text-stone-500">{item.document_type?.label || 'Document'} · {item.state.completion}% complete</p></Link></li>)}</ul>}
       </section>
     </div>
   </div>

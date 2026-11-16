@@ -8,14 +8,19 @@ from app.documents import check_upstream
 router = APIRouter(prefix='/api/v1/admin', tags=['Administration'])
 RESEARCH_GROUPS = {'System Administrators', 'Department Administrators', 'Research Professors', 'Research Assistants', 'Research Viewers'}
 
-async def administrator(request: Request):
+async def current_identity(request: Request):
     response = await call(request, 'GET', '/users/current/')
     check_upstream(request, response.status_code)
-    user_id = response.json()['id']
+    user = response.json()
+    user_id = user['id']
     groups = await all_rows(request, f'/users/{user_id}/groups/')
-    if not any(group['name'] == 'System Administrators' for group in groups):
+    return {'id': int(user_id), 'username': str(user['username']), 'groups': {str(group['name']) for group in groups}}
+
+async def administrator(request: Request):
+    identity = await current_identity(request)
+    if 'System Administrators' not in identity['groups']:
         raise HTTPException(403, 'Account administration is restricted to System Administrators.')
-    return user_id
+    return identity['id']
 
 @router.get('/access')
 async def access(request: Request):

@@ -28,12 +28,20 @@ def require_write(request: Request):
 
 async def call(request: Request, method: str, path: str, **kwargs):
     settings, headers = upstream_access(request)
-    async with httpx.AsyncClient(timeout=120, follow_redirects=False) as client:
+    timeout = kwargs.pop("timeout", settings.request_timeout)
+    client = getattr(request.app.state, "upstream_http", None)
+    owns_client = client is None
+    if owns_client:
+        client = httpx.AsyncClient(timeout=settings.request_timeout, follow_redirects=False)
+    try:
         try:
             return await client.request(method, str(settings.mayan_api_url).rstrip("/") + path,
-                                        headers={**headers, "Accept": "application/json"}, **kwargs)
+                                        headers={**headers, "Accept": "application/json"}, timeout=timeout, **kwargs)
         except httpx.HTTPError:
-            raise HTTPException(503, "The service did not confirm the request. Check the document list before uploading again.") from None
+            raise HTTPException(503, "The upstream service did not respond in time. Please try again.") from None
+    finally:
+        if owns_client:
+            await client.aclose()
 
 
 async def all_rows(request: Request, path: str):
@@ -445,7 +453,7 @@ async def upload(request: Request):
             raise HTTPException(409, "This upload has already been submitted. Check the document list.")
         operations[operation_key] = {"expires": now + 3600}
         filename = (file.filename or "document").replace("\\", "/").split("/")[-1]
-        response = await call(request, "POST", "/documents/upload/",
+        response = await call(request, "POST", "/documents/upload/", timeout=120,
                               data={"document_type_id": str(body.document_type_id), "label": body.label,
                                     "description": body.description},
                               files={"file": (filename, file.file, file.content_type or "application/octet-stream")})
