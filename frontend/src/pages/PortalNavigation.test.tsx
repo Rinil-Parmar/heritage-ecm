@@ -21,7 +21,7 @@ it('keeps both landing links, back navigation and successful sign-in under /port
   render(<BrowserRouter basename="/portal/"><Routes>
     <Route path="/" element={<LandingPage />} />
     <Route path="/sign-in" element={<SignInPage />} />
-    <Route path="/app" element={<AppDestination />} />
+    <Route path="/app/dashboard" element={<AppDestination />} />
   </Routes></BrowserRouter>)
   const user = userEvent.setup()
   expect(screen.getByRole('link', { name: /^Sign in$/ }).getAttribute('href')).toBe('/portal/sign-in')
@@ -35,7 +35,7 @@ it('keeps both landing links, back navigation and successful sign-in under /port
   await user.type(await screen.findByLabelText('Username'), 'researcher')
   await user.type(screen.getByLabelText('Password'), 'test-password')
   await user.click(screen.getByRole('button', { name: /^Sign in$/ }))
-  await screen.findByText('Application route: /app')
-  expect(window.location.pathname).toBe('/portal/app')
+  await screen.findByText('Application route: /app/dashboard')
+  expect(window.location.pathname).toBe('/portal/app/dashboard')
   expect(signIn).toHaveBeenCalledWith('researcher', 'test-password')
 })

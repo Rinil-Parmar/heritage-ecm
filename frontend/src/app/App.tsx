@@ -9,9 +9,11 @@ export function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/sign-in" element={<SignInPage />} />
       <Route path="/app" element={<ApplicationPage />} />
+      <Route path="/app/dashboard" element={<ApplicationPage />} />
       <Route path="/app/users" element={<ApplicationPage />} />
       <Route path="/app/tags" element={<ApplicationPage />} />
       <Route path="/app/reviews" element={<ApplicationPage />} />
+      <Route path="/app/smart-search" element={<ApplicationPage />} />
       <Route path="/app/upload" element={<ApplicationPage />} />
       <Route path="/app/documents/:documentId" element={<ApplicationPage />} />
     </Routes>

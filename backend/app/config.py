@@ -1,4 +1,6 @@
-from pydantic import HttpUrl, Field
+from typing import Literal
+
+from pydantic import HttpUrl, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,3 +15,9 @@ class Settings(BaseSettings):
     ]
     cookie_secure: bool = False  # Local HTTP only; HTTPS deployment must set True.
     session_seconds: int = Field(default=3600, ge=60, le=86400)
+    ai_provider: Literal["disabled", "openai"] = "disabled"
+    ai_model: str = Field(default="gpt-6-luna", min_length=1, max_length=100)
+    ai_api_key: SecretStr | None = None
+    ai_timeout: float = Field(default=20, gt=0, le=60)
+    ai_searches_per_minute: int = Field(default=10, ge=1, le=60)
+    ai_searches_per_day: int = Field(default=200, ge=1, le=10000)
