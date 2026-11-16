@@ -26,7 +26,7 @@ export function DocumentWorkflow({ id, csrf, onChanged }: { id: number; csrf: st
 
   useEffect(() => {
     const controller = new AbortController()
-    setLoading(true); setError(''); setRestricted(false); setSelected(null); setComment('')
+    setLoading(true); setError(''); setRestricted(false); setItems([]); setConfigured(false); setSelected(null); setComment('')
     getWorkflows(id, controller.signal)
       .then(data => { if (!controller.signal.aborted) { setItems(data.results); setConfigured(data.configured) } })
       .catch(cause => {

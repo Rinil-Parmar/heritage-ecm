@@ -11,7 +11,10 @@ router = APIRouter(prefix="/api/v1/records", tags=["Document activity"])
 async def activity(request: Request, document_id: int, page: int = Query(1, ge=1)):
     await read_detail(request, document_id)
     response = await call(request, "GET", f"/objects/documents/document/{document_id}/events/", params={"page": page})
-    if response.status_code == 403:
+    # Mayan deliberately uses 404 as well as 403 for denied object access.
+    # The document was already resolved above, so either status means this
+    # section is restricted rather than that the record disappeared.
+    if response.status_code in (403, 404):
         raise HTTPException(403, "Your account cannot view this document's activity history.")
     check_upstream(request, response.status_code)
     try:

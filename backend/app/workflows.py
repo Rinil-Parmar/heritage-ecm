@@ -121,7 +121,10 @@ def instance_value(value, transitions):
 
 
 async def workflow_instances(request: Request, document_id: int):
-    rows = await all_rows(request, f"/documents/{document_id}/workflow_instances/")
+    rows = await all_rows(
+        request, f"/documents/{document_id}/workflow_instances/",
+        "Your account cannot view this document's review workflow.",
+    )
     results = []
     for row in rows:
         try:
