@@ -9,6 +9,7 @@ import { DocumentComments } from './DocumentComments'
 import { DocumentActivity } from './DocumentActivity'
 import { DocumentPropertiesEditor } from './DocumentPropertiesEditor'
 import { DocumentVersions } from './DocumentVersions'
+import { DocumentWorkflow } from './DocumentWorkflow'
 
 function date(value: string | null) {
   if (!value) return 'Not available'
@@ -121,6 +122,7 @@ export function DocumentDetailPanel({ id, csrf }: { id: number; csrf: string }) 
         </div>
         <RecordMetadata canWrite key={attempt} id={document.id} typeId={document.document_type?.id} csrf={csrf} />
         <RecordOrganization key={`organization-${attempt}`} id={document.id} csrf={csrf} />
+        <DocumentWorkflow key={`workflow-${attempt}`} id={document.id} csrf={csrf} onChanged={() => setAttempt(value => value + 1)} />
         <DocumentVersions canWrite key={`versions-${attempt}`} id={document.id} csrf={csrf} />
         <DocumentComments canWrite key={`comments-${attempt}`} id={document.id} csrf={csrf} />
         <DocumentActivity key={`activity-${attempt}`} id={document.id} />
