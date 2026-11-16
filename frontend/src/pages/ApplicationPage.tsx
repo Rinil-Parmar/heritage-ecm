@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { Archive, FileCheck2, Files, LayoutDashboard, LogOut, Sparkles, Users } from 'lucide-react'
+import { Archive, FileCheck2, Files, KeyRound, LayoutDashboard, LogOut, Sparkles, Users } from 'lucide-react'
 import { getSession, signOut, type Session } from '../api/auth'
 import { ApiError } from '../api/client'
 import { DocumentsPanel } from '../components/DocumentsPanel'
@@ -13,29 +13,41 @@ import { captureRequest } from '../api/uploads'
 import { ReviewQueue } from '../components/ReviewQueue'
 import { SmartSearch } from '../components/SmartSearch'
 import { OperationsDashboard } from '../components/OperationsDashboard'
+import { NotificationMenu } from '../components/NotificationMenu'
+import { AccessControlManager } from '../components/AccessControlManager'
+import { getAccessManagerStatus } from '../api/accessControl'
 
 export function ApplicationPage() {
   const navigate = useNavigate()
   const { documentId } = useParams()
   const location = useLocation()
   const usersPage = location.pathname === '/app/users'
+  const accessPage = location.pathname === '/app/access'
   const tagsPage = location.pathname === '/app/tags'
   const reviewsPage = location.pathname === '/app/reviews'
   const smartSearchPage = location.pathname === '/app/smart-search'
   const dashboardPage = location.pathname === '/app/dashboard'
   const tagsActive = tagsPage || new URLSearchParams(location.search).has('tag')
-  const documentsActive = !dashboardPage && !usersPage && !reviewsPage && !smartSearchPage && !tagsActive && !new URLSearchParams(location.search).has('cabinet')
+  const documentsActive = !dashboardPage && !usersPage && !accessPage && !reviewsPage && !smartSearchPage && !tagsActive && !new URLSearchParams(location.search).has('cabinet')
   const [session, setSession] = useState<Session | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [adminAllowed, setAdminAllowed] = useState(false)
+  const [accessAllowed, setAccessAllowed] = useState(false)
+  const [accessChecked, setAccessChecked] = useState(false)
   useEffect(() => {
     if (!session) { setAdminAllowed(false); return }
     const controller = new AbortController()
     captureRequest<{ allowed: boolean }>('admin/access', { signal: controller.signal }).then(result => { if (!controller.signal.aborted) setAdminAllowed(result.allowed) }).catch(() => { if (!controller.signal.aborted) setAdminAllowed(false) })
     return () => controller.abort()
   }, [session, location.pathname])
+  useEffect(() => {
+    if (!session) { setAccessAllowed(false); setAccessChecked(false); return }
+    const controller = new AbortController()
+    getAccessManagerStatus(controller.signal).then(result => { if (!controller.signal.aborted) setAccessAllowed(result.allowed) }).catch(() => { if (!controller.signal.aborted) setAccessAllowed(false) }).finally(() => { if (!controller.signal.aborted) setAccessChecked(true) })
+    return () => controller.abort()
+  }, [session])
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try { const width = Number(localStorage.getItem('ecm-sidebar-width')); return width >= 220 && width <= 480 ? width : 280 } catch { return 280 }
   })
@@ -91,20 +103,20 @@ export function ApplicationPage() {
           <Link to="/app/smart-search" aria-current={smartSearchPage ? 'page' : undefined} className={`mt-2 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium ${smartSearchPage ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}><Sparkles aria-hidden size={18} />Smart search</Link>
         </nav>
         <Link to="/app/tags" aria-current={tagsActive ? 'page' : undefined} className={`mt-2 block rounded-xl px-4 py-3 text-sm font-medium ${tagsActive ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}>Tags</Link>
-        {adminAllowed && <nav aria-label="Administration" className="mt-5"><p className="mb-2 px-3 text-[0.65rem] font-semibold tracking-[0.2em] text-stone-400 uppercase">Administration</p><Link to="/app/users" aria-current={usersPage ? 'page' : undefined} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium ${usersPage ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}><Users aria-hidden size={18} />Manage users</Link></nav>}
+        {(adminAllowed || accessAllowed) && <nav aria-label="Administration" className="mt-5"><p className="mb-2 px-3 text-[0.65rem] font-semibold tracking-[0.2em] text-stone-400 uppercase">Administration</p>{adminAllowed && <Link to="/app/users" aria-current={usersPage ? 'page' : undefined} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium ${usersPage ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}><Users aria-hidden size={18} />Manage users</Link>}{accessAllowed && <Link to="/app/access" aria-current={accessPage ? 'page' : undefined} className={`mt-2 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium ${accessPage ? 'bg-white/10 text-white' : 'text-stone-300 hover:bg-white/5'}`}><KeyRound aria-hidden size={18} />Access control</Link>}</nav>}
         {session && <CabinetNavigation />}
         {/* <div className="mt-6 border-t border-white/10 pt-5"><p className="font-serif text-xl text-amber-100 italic">Keep the context.</p><p className="mt-2 text-xs leading-6 text-stone-300">Preserve the connections that make your research meaningful.</p><Link to="/" className="mt-5 inline-flex items-center gap-2 text-xs text-stone-300 hover:text-white">About ArcheoECM<ArrowUpRight aria-hidden size={14} /></Link></div> */}
         </div>
       </aside>
       <div className="min-w-0">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 bg-white px-6 py-4 sm:px-10">
-          <p className="text-sm text-stone-500">{usersPage ? 'Administration' : dashboardPage ? 'Workspace' : 'Library'} <span aria-hidden className="mx-2 text-stone-300">/</span><span className="font-medium text-stone-800">{usersPage ? 'Manage users' : dashboardPage ? 'My work' : smartSearchPage ? 'Smart search' : reviewsPage ? 'Review queue' : tagsPage ? 'Tags' : location.pathname === '/app/upload' ? 'Upload document' : 'Documents'}</span></p>
-          {session && <div className="flex items-center gap-4"><span className="max-w-40 truncate text-sm text-stone-600" title={session.username}>{session.username}</span><button onClick={logout} disabled={busy} className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-xs font-medium hover:bg-stone-50 focus-visible:outline-2 disabled:opacity-60"><LogOut aria-hidden size={15} />{busy ? 'Signing out…' : 'Sign out'}</button></div>}
+          <p className="text-sm text-stone-500">{usersPage || accessPage ? 'Administration' : dashboardPage ? 'Workspace' : 'Library'} <span aria-hidden className="mx-2 text-stone-300">/</span><span className="font-medium text-stone-800">{usersPage ? 'Manage users' : accessPage ? 'Access control' : dashboardPage ? 'My work' : smartSearchPage ? 'Smart search' : reviewsPage ? 'Review queue' : tagsPage ? 'Tags' : location.pathname === '/app/upload' ? 'Upload document' : 'Documents'}</span></p>
+          {session && <div className="flex items-center gap-3"><NotificationMenu csrf={session.csrf_token} /><span className="max-w-40 truncate text-sm text-stone-600" title={session.username}>{session.username}</span><button onClick={logout} disabled={busy} className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-xs font-medium hover:bg-stone-50 focus-visible:outline-2 disabled:opacity-60"><LogOut aria-hidden size={15} />{busy ? 'Signing out…' : 'Sign out'}</button></div>}
         </header>
       <main className="mx-auto max-w-7xl px-6 py-9 sm:px-10 sm:py-12">
         {error && <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}{!session && <button onClick={() => setAttempt(attempt + 1)} className="ml-4 underline">Try again</button>}</div>}
         {!session && !error && <p role="status">Checking your session…</p>}
-        {session && (dashboardPage ? <OperationsDashboard username={session.username} adminAllowed={adminAllowed} /> : smartSearchPage ? <SmartSearch csrf={session.csrf_token} /> : reviewsPage ? <ReviewQueue /> : tagsPage ? <TagLibrary /> : location.pathname === '/app/users' ? (adminAllowed ? <UserAdministration csrf={session.csrf_token} /> : <p>Account administration is unavailable for this account.</p>) : location.pathname === '/app/upload' ? <UploadPanel csrf={session.csrf_token} /> : documentId ? <DocumentDetailPanel key={documentId} id={Number(documentId)} csrf={session.csrf_token} /> : <DocumentsPanel />)}
+        {session && (dashboardPage ? <OperationsDashboard username={session.username} adminAllowed={adminAllowed} /> : accessPage ? (!accessChecked ? <p role="status">Checking access-management permission…</p> : accessAllowed ? <AccessControlManager csrf={session.csrf_token} /> : <p>Access management is unavailable for this account.</p>) : smartSearchPage ? <SmartSearch csrf={session.csrf_token} /> : reviewsPage ? <ReviewQueue username={session.username} csrf={session.csrf_token} /> : tagsPage ? <TagLibrary /> : location.pathname === '/app/users' ? (adminAllowed ? <UserAdministration csrf={session.csrf_token} /> : <p>Account administration is unavailable for this account.</p>) : location.pathname === '/app/upload' ? <UploadPanel csrf={session.csrf_token} /> : documentId ? <DocumentDetailPanel key={documentId} id={Number(documentId)} csrf={session.csrf_token} /> : <DocumentsPanel />)}
       </main>
       </div>
     </div>

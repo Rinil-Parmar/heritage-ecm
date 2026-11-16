@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     ]
     cookie_secure: bool = False  # Local HTTP only; HTTPS deployment must set True.
     session_seconds: int = Field(default=3600, ge=60, le=86400)
+    database_path: str = Field(default="./data/archeoecm.db", min_length=1, max_length=500)
     ai_provider: Literal["disabled", "openai"] = "disabled"
     ai_model: str = Field(default="gpt-6-luna", min_length=1, max_length=100)
     ai_api_key: SecretStr | None = None

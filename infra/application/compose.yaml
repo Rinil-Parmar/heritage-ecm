@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     init: true
     mem_limit: 768m
+    volumes:
+      - archeoecm-data:/data
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/v1/health', timeout=5)"]
       interval: 10s
@@ -31,3 +33,6 @@ services:
     logging:
       driver: json-file
       options: {max-size: 10m, max-file: '3'}
+
+volumes:
+  archeoecm-data:
