@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, FileText, FolderOpen, RefreshCw, Search, Sli
 import { listDocuments, type DocumentFilters, type DocumentPage } from '../api/documents'
 import { captureRequest } from '../api/uploads'
 import { ApiError } from '../api/client'
+import { CollectionOverview } from './CollectionOverview'
 
 function createdDate(value: string) {
   const date = new Date(value)
@@ -92,12 +93,12 @@ export function DocumentsPanel() {
   return (
     <div>
       {filters.tagId && <p className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">Browsing tagged documents. Search and filters apply within this collection. <Link to="/app/tags" className="ml-2 font-semibold underline">Browse tags</Link></p>}
-      {filters.cabinetId && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">Browsing cabinet #{filters.cabinetId}. Search applies inside this folder. <Link to="/app" className="ml-2 font-semibold underline">All documents</Link></p>}
+      {filters.cabinetId && <CollectionOverview key={filters.cabinetId} cabinetId={filters.cabinetId} />}
       <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
         <div>
           <p className="mb-2 text-xs font-semibold tracking-[0.18em] text-stone-500 uppercase">Research library</p>
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Documents</h1>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-stone-600">Your organization’s records, with their context close at hand.</p>
+          {filters.cabinetId ? <h2 className="text-2xl font-semibold tracking-tight">Documents in this collection</h2> : <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Documents</h1>}
+          <p className="mt-3 max-w-xl text-sm leading-6 text-stone-600">{filters.cabinetId ? 'Search, filter and open the records you can access in this folder.' : 'Your organization’s records, with their context close at hand.'}</p>
         </div>
         <div className="flex flex-wrap gap-3"><Link to="/app/upload" className="inline-flex items-center rounded-xl bg-[#233b33] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#304e43]">Upload document</Link><button onClick={() => setRefresh(value => value + 1)} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium hover:bg-stone-100 disabled:opacity-50">
           <RefreshCw aria-hidden size={16} className={loading ? 'animate-spin' : ''} />Refresh
@@ -108,6 +109,7 @@ export function DocumentsPanel() {
         <div className="grid gap-4 xl:grid-cols-[minmax(18rem,1fr)_minmax(12rem,0.45fr)_minmax(10rem,0.32fr)_minmax(10rem,0.32fr)_auto] xl:items-end">
           <label className="block text-sm font-medium" htmlFor="document-search">Search the collection
             <span className="relative mt-2 block"><Search aria-hidden size={17} className="absolute top-3.5 left-3.5 text-stone-400" /><input id="document-search" type="search" value={draftQuery} onChange={event => setDraftQuery(event.target.value)} maxLength={200} placeholder="Title, metadata, OCR text…" className="w-full rounded-xl border border-stone-300 py-3 pr-4 pl-10 text-sm outline-none focus:border-[#365d4d] focus:ring-2 focus:ring-[#365d4d]/20" /></span>
+            <span className="mt-2 block text-xs font-normal leading-5 text-stone-500">Quick search checks indexed titles and text. For phrases such as “reports from Canada in 2025,” use <Link to="/app/smart-search" className="font-semibold text-[#365d4d] underline underline-offset-2">Smart search</Link>.</span>
           </label>
           <label className="block text-sm font-medium" htmlFor="document-type-filter">Document type
             <select id="document-type-filter" value={draftType} onChange={event => setDraftType(event.target.value)} className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3 py-3 text-sm outline-none focus:border-[#365d4d]"><option value="">All types</option>{types.map(type => <option key={type.id} value={type.id}>{type.label}</option>)}</select>

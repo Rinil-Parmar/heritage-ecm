@@ -50,7 +50,14 @@ export interface ReviewAssignment {
   updated_at: string
 }
 
-export interface ReviewAssignee { id: number; username: string; label: string }
+export interface ReviewAssignee {
+  id: number
+  username: string
+  label: string
+  role_id: number
+  role_label: string
+  group_name: string
+}
 export interface BlockedReview {
   document_id: number
   label: string

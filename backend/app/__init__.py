@@ -1,1 +1,1 @@
-"""ArcheoECM application backend."""
+"""ArcheoVault application backend."""

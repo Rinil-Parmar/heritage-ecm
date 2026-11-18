@@ -1,0 +1,23 @@
+{
+  "roles": [
+    {"name": "System Administrator", "group": "System Administrators", "permissions": []},
+    {"name": "Department Administrator", "group": "Department Administrators", "permissions": ["View document types", "Execute search tools", "View tags", "Create documents", "Create cabinets", "Create new tags"]},
+    {"name": "Research Professor", "group": "Research Professors", "permissions": ["View document types", "Execute search tools", "View tags", "Create documents"]},
+    {"name": "Research Assistant", "group": "Research Assistants", "permissions": ["View document types", "Execute search tools", "View tags", "Create documents"]},
+    {
+      "name": "Research Viewer",
+      "group": "Research Viewers",
+      "permissions": ["View document types", "Execute search tools", "View tags"],
+      "remove_permissions": [
+        "cabinets.cabinet_view",
+        "document_downloads.document_file_download",
+        "document_indexing.document_index_instance_view",
+        "document_indexing.document_index_view",
+        "documents.document_view",
+        "documents.document_file_view",
+        "documents.document_version_view",
+        "metadata.metadata_document_view"
+      ]
+    }
+  ]
+}

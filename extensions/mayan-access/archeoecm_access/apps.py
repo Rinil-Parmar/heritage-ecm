@@ -6,4 +6,4 @@ class ArcheoECMAccessApp(MayanAppConfig):
     app_namespace = 'archeoecm_access'
     app_url = 'archeoecm-access'
     has_rest_api = True
-    verbose_name = 'ArcheoECM access'
+    verbose_name = 'ArcheoVault access'

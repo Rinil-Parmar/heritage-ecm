@@ -1,4 +1,4 @@
-# ArcheoECM backend
+# ArcheoVault backend
 
 Python FastAPI provides the application API between React and Mayan's supported REST API.
 Mayan remains the document and permission system of record. We do not write directly

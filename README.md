@@ -73,6 +73,8 @@ See the [local Mayan guide](infra/mayan/README.md) for container versions and
 runtime commands. See the frontend and backend READMEs for local application setup.
 See the [deployment pipeline guide](docs/deployment-pipeline.md) for the
 approval-gated workflow that validates or redeploys Mayan on the university VM.
+Use the [demo and manual testing guide](docs/demo-and-manual-testing.md) to prepare
+synthetic organization data and verify the complete administrator and user flows.
 
 ## Milestones
 

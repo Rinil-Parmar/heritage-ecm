@@ -6,7 +6,14 @@ from app.uploads import all_rows, call, require_write
 from app.documents import check_upstream
 
 router = APIRouter(prefix='/api/v1/admin', tags=['Administration'])
-RESEARCH_GROUPS = {'System Administrators', 'Department Administrators', 'Research Professors', 'Research Assistants', 'Research Viewers'}
+ROLE_FOR_GROUP = {
+    'System Administrators': 'System Administrator',
+    'Department Administrators': 'Department Administrator',
+    'Research Professors': 'Research Professor',
+    'Research Assistants': 'Research Assistant',
+    'Research Viewers': 'Research Viewer',
+}
+RESEARCH_GROUPS = set(ROLE_FOR_GROUP)
 
 async def current_identity(request: Request):
     response = await call(request, 'GET', '/users/current/')
@@ -35,12 +42,34 @@ async def access(request: Request):
 @router.get('/users', dependencies=[Depends(administrator)])
 async def users(request: Request):
     rows = await all_rows(request, '/users/')
-    return {'results': [{key: row.get(key) for key in ('id', 'username', 'first_name', 'last_name', 'is_active')} for row in rows]}
+    available_groups = (await groups(request))['results']
+    memberships_by_user: dict[int, list[dict]] = {}
+    for group in available_groups:
+        members = await all_rows(request, f"/groups/{group['id']}/users/")
+        for member in members:
+            memberships_by_user.setdefault(int(member['id']), []).append(group)
+    results = []
+    for row in rows:
+        memberships = sorted(
+            memberships_by_user.get(int(row['id']), []),
+            key=lambda group: str(group['name']).casefold(),
+        )
+        results.append({
+            **{key: row.get(key) for key in ('id', 'username', 'first_name', 'last_name', 'is_active')},
+            'groups': [str(group['name']) for group in memberships],
+            'roles': [str(group['role']) for group in memberships],
+        })
+    return {'results': results}
 
 @router.get('/groups', dependencies=[Depends(administrator)])
 async def groups(request: Request):
     rows = await all_rows(request, '/groups/')
-    return {'results': [{'id': row['id'], 'name': row['name']} for row in rows if row['name'] in RESEARCH_GROUPS]}
+    return {
+        'results': [
+            {'id': row['id'], 'name': row['name'], 'role': ROLE_FOR_GROUP[row['name']]}
+            for row in rows if row['name'] in RESEARCH_GROUPS
+        ]
+    }
 
 class NewUser(BaseModel):
     username: str = Field(min_length=1, max_length=150, pattern=r'^[\w.@+-]+$')
@@ -74,7 +103,14 @@ async def user_detail(request: Request, user_id: int):
     row = response.json()
     memberships = await all_rows(request, f'/users/{user_id}/groups/')
     return {**{key: row.get(key, '') for key in ('id', 'username', 'first_name', 'last_name', 'email')},
-            'groups': [{'id': group['id'], 'name': group['name']} for group in memberships]}
+            'groups': [
+                {
+                    'id': group['id'],
+                    'name': group['name'],
+                    'role': ROLE_FOR_GROUP.get(group['name']),
+                }
+                for group in memberships
+            ]}
 
 class UserUpdate(BaseModel):
     first_name: str = Field(max_length=150)

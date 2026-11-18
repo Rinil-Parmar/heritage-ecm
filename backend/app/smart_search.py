@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, time
 import asyncio
+from difflib import SequenceMatcher
 import json
 import re
 from typing import Any, Literal
@@ -134,33 +135,130 @@ async def catalog_for(request: Request) -> dict[str, list[dict]]:
 
 
 def phrase_match(query: str, rows: list[dict], value_key: str = "label") -> dict | None:
+    """Match catalog labels despite plural forms, extra words, or a small typo."""
     lowered = query.casefold()
-    matches = [row for row in rows if str(row.get(value_key) or "").casefold() in lowered]
-    if not matches:
-        return None
-    return max(matches, key=lambda row: len(str(row.get(value_key) or "")))
+    exact = [row for row in rows if str(row.get(value_key) or "").casefold() in lowered]
+    if exact:
+        return max(exact, key=lambda row: len(str(row.get(value_key) or "")))
+
+    def tokens(value: str) -> list[str]:
+        result = []
+        for token in re.findall(r"[a-z0-9]+", value.casefold()):
+            if token in {"and", "the", "of", "in", "for"}:
+                continue
+            if token.endswith("ies") and len(token) > 4:
+                token = token[:-3] + "y"
+            elif token.endswith("s") and len(token) > 4:
+                token = token[:-1]
+            result.append(token)
+        return result
+
+    query_tokens = tokens(query)
+    best: tuple[float, dict] | None = None
+    for row in rows:
+        label_tokens = tokens(str(row.get(value_key) or ""))
+        if not label_tokens:
+            continue
+        matched = 0
+        for label_token in label_tokens:
+            if any(label_token == query_token or SequenceMatcher(None, label_token, query_token).ratio() >= 0.86
+                   for query_token in query_tokens):
+                matched += 1
+        coverage = matched / len(label_tokens)
+        # One-word labels must match; longer labels need most identifying words.
+        threshold = 1.0 if len(label_tokens) == 1 else 0.6
+        if coverage >= threshold:
+            score = coverage + matched / max(1, len(query_tokens))
+            if best is None or score > best[0]:
+                best = (score, row)
+    return best[1] if best else None
+
+
+def metadata_field(catalog: dict[str, list[dict]], *aliases: str) -> dict | None:
+    wanted = {re.sub(r"[^a-z0-9]", "", value.casefold()) for value in aliases}
+    for row in catalog["metadata"]:
+        candidates = {re.sub(r"[^a-z0-9]", "", str(row.get(key) or "").casefold()) for key in ("name", "label")}
+        if wanted & candidates:
+            return row
+    return None
+
+
+def metadata_criteria(query: str, catalog: dict[str, list[dict]]) -> tuple[list[MetadataCriterion], list[tuple[int, int]]]:
+    """Extract common research fields from plain language without inventing fields."""
+    definitions = [
+        (("country",), r"\bcountry\s*(?:is|:)?\s*([A-Za-z][A-Za-z .'-]{1,50})"),
+        (("region",), r"\bregion\s*(?:is|:)?\s*([A-Za-z][A-Za-z .'-]{1,50})"),
+        (("site code", "sitecode"), r"\bsite\s+code\s*(?:is|:)?\s*([A-Za-z0-9][A-Za-z0-9._/-]{1,40})"),
+        (("site name", "sitename"), r"\bsite(?!\s+code)(?:\s+name)?\s*(?:is|:)?\s*([A-Za-z0-9][A-Za-z0-9 ._'-]{1,60})"),
+        (("research project", "project"), r"\bproject\s*(?:is|:)?\s*([A-Za-z0-9][A-Za-z0-9 ._'-]{1,80})"),
+        (("researcher or author", "researcher", "author"), r"\b(?:researcher|author|by)\s*(?:is|:)?\s*([A-Za-z][A-Za-z .'-]{1,60})"),
+        (("historical period", "period"), r"\b(?:historical\s+)?period\s*(?:is|:)?\s*([A-Za-z0-9][A-Za-z0-9 .'-]{1,60})"),
+        (("excavation season", "season"), r"\bseason\s*(?:is|:)?\s*((?:19|20)\d{2}|[A-Za-z][A-Za-z0-9 .'-]{1,40})"),
+    ]
+    stop = r"(?=\s+(?:created|dated|between|from|to|in|tagged|with|during|for|and\s+type)\b|[,.;]|$)"
+    criteria: list[MetadataCriterion] = []
+    spans: list[tuple[int, int]] = []
+    used_fields: set[str] = set()
+    for aliases, raw_pattern in definitions:
+        field = metadata_field(catalog, *aliases)
+        if not field:
+            continue
+        match = re.search(raw_pattern + stop, query, flags=re.I)
+        if not match:
+            continue
+        value = match.group(1).strip(" .,-")
+        if value:
+            criteria.append(MetadataCriterion(field=str(field["name"]), value=value))
+            spans.append(match.span())
+            used_fields.add(str(field["name"]))
+
+    # Natural phrasing such as “reports from Canada” maps to Country when that
+    # field exists. Numeric “from 2023” is deliberately excluded.
+    country = metadata_field(catalog, "country")
+    if country and str(country["name"]) not in used_fields:
+        match = re.search(r"\bfrom\s+([A-Za-z][A-Za-z .'-]{1,50}?)" + stop, query, flags=re.I)
+        if match:
+            criteria.append(MetadataCriterion(field=str(country["name"]), value=match.group(1).strip(" .,-")))
+            spans.append(match.span())
+    return criteria[:5], spans
 
 
 def standard_plan(query: str, catalog: dict[str, list[dict]]) -> SearchPlan:
     """Useful, deterministic fallback before or during provider configuration."""
     years = [int(value) for value in re.findall(r"\b(?:19|20)\d{2}\b", query)]
+    current_year = date.today().year
+    if re.search(r"\bthis\s+year\b", query, flags=re.I):
+        years.append(current_year)
+    if re.search(r"\blast\s+year\b", query, flags=re.I):
+        years.append(current_year - 1)
     start = date(min(years), 1, 1) if years else None
     end = date(max(years), 12, 31) if years else None
     document_type = phrase_match(query, catalog["document_types"])
     tag = phrase_match(query, catalog["tags"])
     cabinet = phrase_match(query, catalog["cabinets"])
-    keywords = re.sub(r"\b(?:19|20)\d{2}\b", " ", query)
+    metadata, metadata_spans = metadata_criteria(query, catalog)
+    keyword_chars = list(query)
+    for span_start, span_end in metadata_spans:
+        keyword_chars[span_start:span_end] = " " * (span_end - span_start)
+    keywords = re.sub(r"\b(?:19|20)\d{2}\b", " ", "".join(keyword_chars))
+    keywords = re.sub(r"\b(?:this|last)\s+year\b", " ", keywords, flags=re.I)
     for matched in (document_type, tag, cabinet):
         if matched:
-            keywords = re.sub(re.escape(str(matched["label"])), " ", keywords, flags=re.I)
-    keywords = re.sub(r"\b(?:from|to|between|and|in|created|dated|show|find|records?|documents?|tagged|tag|cabinet|folder|type)\b", " ", keywords, flags=re.I)
+            label = str(matched["label"])
+            keywords = re.sub(re.escape(label), " ", keywords, flags=re.I)
+            # Also remove identifying words when a plural or fuzzy label matched.
+            for token in re.findall(r"[A-Za-z0-9]+", label):
+                if len(token) > 3:
+                    keywords = re.sub(rf"\b{re.escape(token.rstrip('s'))}(?:s|es)?\b", " ", keywords, flags=re.I)
+    keywords = re.sub(r"\b(?:from|to|between|and|in|created|dated|show|find|search|give|list|records?|documents?|tagged|tag|cabinet|folder|type|all|me|the|with)\b", " ", keywords, flags=re.I)
     keywords = re.sub(r"\s+", " ", keywords).strip()
     return SearchPlan(
         keywords=keywords[:200], created_from=start, created_to=end,
         document_type_id=int(document_type["id"]) if document_type else None,
         tag_id=int(tag["id"]) if tag else None,
         cabinet_id=int(cabinet["id"]) if cabinet else None,
-        explanation="Standard search extracted recognizable filters from the request.",
+        metadata=metadata,
+        explanation="Recognized document type, dates, collection terms, and research metadata from your request.",
     )
 
 

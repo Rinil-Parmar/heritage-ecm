@@ -18,6 +18,8 @@ def test_supported_acl_paths_and_bundle_boundaries():
     assert "Edit document properties" in BUNDLES["document"]["contributor"]["permissions"]
     assert "View workflow templates" in BUNDLES["document"]["reviewer"]["permissions"]
     assert "Transition workflow instances" in BUNDLES["document"]["reviewer"]["permissions"]
+    assert BUNDLES["document"]["contributor"]["permissions"] < BUNDLES["document"]["edit_and_review"]["permissions"]
+    assert BUNDLES["document"]["reviewer"]["permissions"] < BUNDLES["document"]["edit_and_review"]["permissions"]
     for bundle in ("read_only", "contributor", "reviewer"):
         permissions = BUNDLES["document"][bundle]["permissions"]
         assert "View cabinets" in permissions
@@ -39,7 +41,10 @@ def test_reviewer_access_bridges_shared_workflow_acl(monkeypatch):
         if path == "/workflow_templates/":
             return [{"id": 1, "internal_name": "research_document_review"}]
         if path == "/objects/document_states/workflow/permissions/":
-            return [{"pk": "document_states.workflow_view", "label": "View workflow templates"}]
+            return [
+                {"pk": "document_states.workflow_view", "label": "View workflow templates"},
+                {"pk": "document_states.workflow_transition", "label": "Transition workflow instances"},
+            ]
         raise AssertionError(path)
 
     async def fake_acl_rows(_request, app_label, model, object_id):
@@ -51,7 +56,10 @@ def test_reviewer_access_bridges_shared_workflow_acl(monkeypatch):
         return [{
             "id": 7,
             "role": {"id": 12, "label": "Research Professor"},
-            "permissions": [{"pk": "document_states.workflow_view"}],
+            "permissions": [
+                {"pk": "document_states.workflow_transition"},
+                {"pk": "document_states.workflow_view"},
+            ],
         }]
 
     class Response:
@@ -69,7 +77,7 @@ def test_reviewer_access_bridges_shared_workflow_acl(monkeypatch):
     monkeypatch.setattr(access_control, "object_acl_rows", fake_acl_rows)
     monkeypatch.setattr(access_control, "call", fake_call)
 
-    coroutine = access_control.ensure_workflow_role_visibility(object(), 12)
+    coroutine = access_control.ensure_workflow_role_visibility(object(), 12, allow_transition=True)
     try:
         coroutine.send(None)
     except StopIteration:
@@ -79,6 +87,11 @@ def test_reviewer_access_bridges_shared_workflow_acl(monkeypatch):
 
     assert writes == [
         ("POST", "/objects/document_states/workflow/1/acls/", {"role_id": 12}),
+        (
+            "POST",
+            "/objects/document_states/workflow/1/acls/7/permissions/add/",
+            {"permission": "document_states.workflow_transition"},
+        ),
         (
             "POST",
             "/objects/document_states/workflow/1/acls/7/permissions/add/",

@@ -1,6 +1,6 @@
-# ArcheoECM frontend
+# ArcheoVault frontend
 
-React and TypeScript frontend for the ArcheoECM research document system.
+React and TypeScript frontend for the ArcheoVault research document system.
 The frontend communicates with the configured ECM API and does not access its
 database or document storage directly.
 

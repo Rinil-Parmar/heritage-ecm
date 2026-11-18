@@ -26,13 +26,13 @@ REVIEW_WORKFLOW_INTERNAL_NAME = "research_document_review"
 BUNDLES = {
     "document": {
         "none": {
-            "label": "Remove managed access",
-            "description": "Remove the document permissions managed by ArcheoECM for this role.",
+            "label": "No document access",
+            "description": "Remove the document access managed by ArcheoVault for this audience.",
             "permissions": set(),
         },
         "read_only": {
-            "label": "Read only",
-            "description": "Open, preview, download, and read the record's organization, discussion, activity, and review status.",
+            "label": "View document",
+            "description": "Open, preview, and download the document, including its metadata, tags, activity, comments, and review status.",
             "permissions": {
                 "View documents", "View document files", "View document versions",
                 "Download document files", "View metadata from a document", "View tags",
@@ -41,8 +41,8 @@ BUNDLES = {
             },
         },
         "contributor": {
-            "label": "Contributor",
-            "description": "Read the record and maintain its files, metadata, organization, comments, and review submission.",
+            "label": "Edit document",
+            "description": "View the document and update its files, metadata, tags, cabinets, comments, and review submission.",
             "permissions": {
                 "View documents", "View document files", "View document versions",
                 "Download document files", "View metadata from a document", "View tags",
@@ -56,8 +56,8 @@ BUNDLES = {
             },
         },
         "reviewer": {
-            "label": "Reviewer",
-            "description": "Read the complete record, its history, and perform available review decisions.",
+            "label": "Review document",
+            "description": "View the complete document and perform the review decisions available to this audience.",
             "permissions": {
                 "View documents", "View document files", "View document versions",
                 "Download document files", "View metadata from a document", "View tags",
@@ -68,24 +68,32 @@ BUNDLES = {
     },
     "cabinet": {
         "none": {
-            "label": "Remove managed access",
-            "description": "Remove the cabinet permissions managed by ArcheoECM for this role.",
+            "label": "No cabinet access",
+            "description": "Remove the cabinet access managed by ArcheoVault for this audience.",
             "permissions": set(),
         },
         "browse": {
-            "label": "Browse",
-            "description": "See this cabinet. Document access must still be granted separately.",
+            "label": "See cabinet",
+            "description": "See this cabinet in navigation. Documents inside remain protected and require their own document access.",
             "permissions": {"View cabinets"},
         },
         "organize": {
-            "label": "Organize",
-            "description": "See and maintain this cabinet and its document membership.",
+            "label": "Manage cabinet",
+            "description": "See and edit this cabinet and organize its document membership. This does not unlock the documents inside.",
             "permissions": {
                 "View cabinets", "Add documents to cabinets",
                 "Remove documents from cabinets", "Edit cabinets",
             },
         },
     },
+}
+BUNDLES["document"]["edit_and_review"] = {
+    "label": "Edit and review document",
+    "description": "Maintain the document and perform its available review decisions.",
+    "permissions": (
+        BUNDLES["document"]["contributor"]["permissions"]
+        | BUNDLES["document"]["reviewer"]["permissions"]
+    ),
 }
 
 
@@ -144,8 +152,10 @@ async def acl_rows(request: Request, scope: str, object_id: int):
     return await object_acl_rows(request, app_label, model, object_id)
 
 
-async def ensure_workflow_role_visibility(request: Request, role_id: int):
-    """Grant the role visibility of the shared review template.
+async def ensure_workflow_role_visibility(
+    request: Request, role_id: int, *, allow_transition: bool = False
+):
+    """Grant the role the required permissions on the shared review template.
 
     Mayan checks workflow visibility twice: on the document and on the Workflow
     object inherited by each workflow instance. The document bundle handles the
@@ -171,12 +181,19 @@ async def ensure_workflow_role_visibility(request: Request, role_id: int):
     permission_rows = await all_rows(
         request, f"/objects/{app_label}/{model}/permissions/"
     )
-    view_permission = next(
-        (str(row["pk"]) for row in permission_rows if row.get("label") == "View workflow templates"),
-        None,
-    )
-    if view_permission is None:
-        raise HTTPException(502, "Mayan did not expose workflow visibility permission.")
+    permissions_by_label = {
+        str(row.get("label")): str(row["pk"])
+        for row in permission_rows if row.get("pk") is not None
+    }
+    required_labels = {"View workflow templates"}
+    if allow_transition:
+        required_labels.add("Transition workflow instances")
+    missing = required_labels - set(permissions_by_label)
+    if missing:
+        raise HTTPException(
+            502, f"Mayan did not expose required workflow permissions: {', '.join(sorted(missing))}."
+        )
+    required_permissions = {permissions_by_label[label] for label in required_labels}
 
     acls = await object_acl_rows(request, app_label, model, workflow_id)
     acl = next((row for row in acls if row["role"]["id"] == role_id), None)
@@ -193,19 +210,60 @@ async def ensure_workflow_role_visibility(request: Request, role_id: int):
         acl_id = acl["id"]
         current = {item["pk"] for item in acl["permissions"]}
 
-    if view_permission not in current:
+    for permission in sorted(required_permissions - current):
         response = await call(
             request, "POST",
             object_path(app_label, model, workflow_id, f"{acl_id}/permissions/add/"),
-            json={"permission": view_permission},
+            json={"permission": permission},
         )
         if response.status_code not in (200, 201, 204):
             check_upstream(request, response.status_code)
 
     verified = await object_acl_rows(request, app_label, model, workflow_id)
     updated = next((row for row in verified if row["role"]["id"] == role_id), None)
-    if updated is None or view_permission not in {item["pk"] for item in updated["permissions"]}:
-        raise HTTPException(502, "Mayan did not confirm workflow visibility for this role.")
+    verified_permissions = {item["pk"] for item in (updated or {}).get("permissions", [])}
+    if updated is None or not required_permissions.issubset(verified_permissions):
+        raise HTTPException(502, "Mayan did not confirm the required workflow access for this role.")
+
+
+async def ensure_reviewer_access(request: Request, document_id: int, role_id: int):
+    """Add reviewer permissions without removing the role's existing access."""
+    permissions = await class_permissions(request, "document")
+    by_label = {row["label"]: row["pk"] for row in permissions}
+    labels = BUNDLES["document"]["reviewer"]["permissions"]
+    target = {by_label[label] for label in labels if label in by_label}
+    if not target:
+        raise HTTPException(422, "Mayan exposes no reviewer permissions for documents.")
+
+    await ensure_workflow_role_visibility(request, role_id, allow_transition=True)
+    acls = await acl_rows(request, "document", document_id)
+    acl = next((row for row in acls if row["role"]["id"] == role_id), None)
+    if acl is None:
+        created = await call(
+            request, "POST", scope_path("document", document_id), json={"role_id": role_id}
+        )
+        if created.status_code != 201:
+            check_upstream(request, created.status_code)
+        acl_id = int(created.json()["id"])
+        current = set()
+    else:
+        acl_id = acl["id"]
+        current = {item["pk"] for item in acl["permissions"]}
+
+    for permission in sorted(target - current):
+        response = await call(
+            request, "POST",
+            scope_path("document", document_id, f"{acl_id}/permissions/add/"),
+            json={"permission": permission},
+        )
+        if response.status_code not in (200, 201, 204):
+            check_upstream(request, response.status_code)
+
+    verified = await acl_rows(request, "document", document_id)
+    updated = next((row for row in verified if row["role"]["id"] == role_id), None)
+    if updated is None or not target.issubset({item["pk"] for item in updated["permissions"]}):
+        raise HTTPException(502, "Mayan did not confirm reviewer access for this role.")
+    return updated
 
 
 @router.get("/access")
@@ -331,7 +389,10 @@ async def update_acl(request: Request, body: ACLUpdate):
     # Establish that narrow companion ACL before changing the document. If the
     # document update later fails, this alone exposes no document records.
     if body.scope == "document" and "View workflow templates" in bundle["permissions"]:
-        await ensure_workflow_role_visibility(request, body.role_id)
+        await ensure_workflow_role_visibility(
+            request, body.role_id,
+            allow_transition="Transition workflow instances" in bundle["permissions"],
+        )
     if acl is None:
         created = await call(request, "POST", scope_path(body.scope, body.object_id), json={"role_id": body.role_id})
         if created.status_code != 201:

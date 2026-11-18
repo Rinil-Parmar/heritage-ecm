@@ -87,7 +87,7 @@ Keep that terminal open during deployment. If a service already runs the runner,
 
 ## 5. Deploy
 
-1. GitHub → Actions → **Deploy ArcheoECM application** → **Run workflow**, branch **main**.
+1. GitHub → Actions → **Deploy ArcheoVault application** → **Run workflow**, branch **main**.
 2. The build job creates both images from that commit on a GitHub-hosted runner and uploads a checksummed release artifact.
 3. Open the run → **Review deployments** → approve `mayan-production`.
 4. The VM runner downloads those exact images and Compose configuration, loads the images, and starts project `archeoecm-application`.
