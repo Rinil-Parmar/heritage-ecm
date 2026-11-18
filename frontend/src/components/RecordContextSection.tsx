@@ -23,7 +23,7 @@ export function RecordContextSection() {
             A document becomes useful when its story stays attached.
           </h2>
           <p className="mt-6 max-w-xl text-lg leading-8 text-stone-600">
-            ArcheoECM brings the file, descriptive metadata, classification, and version history into one record so evidence remains understandable after the fieldwork ends.
+            ArcheoVault brings the file, descriptive metadata, classification, and version history into one record so evidence remains understandable after the fieldwork ends.
           </p>
           <ul className="mt-8 space-y-4">
             {contextPoints.map((point) => (

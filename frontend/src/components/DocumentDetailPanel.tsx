@@ -10,6 +10,8 @@ import { DocumentActivity } from './DocumentActivity'
 import { DocumentPropertiesEditor } from './DocumentPropertiesEditor'
 import { DocumentVersions } from './DocumentVersions'
 import { DocumentWorkflow } from './DocumentWorkflow'
+import { RecordReadiness } from './RecordReadiness'
+import { RecordRelationships } from './RecordRelationships'
 
 function date(value: string | null) {
   if (!value) return 'Not available'
@@ -107,7 +109,8 @@ export function DocumentDetailPanel({ id, csrf }: { id: number; csrf: string }) 
       : <>
         <div className="mb-8 flex flex-wrap items-start justify-between gap-5"><div className="min-w-0 flex-1"><p className="mb-2 text-xs font-semibold tracking-widest text-stone-500 uppercase">Record #{document.id}</p><h1 className="break-words text-3xl font-semibold tracking-tight">{document.label || 'Untitled document'}</h1><p className="mt-3 text-sm text-stone-500">{document.document_type?.label || 'Unspecified type'} · Created {date(document.datetime_created)}</p></div>{document.file_latest && <button onClick={download} disabled={downloading} className="inline-flex items-center gap-2 rounded-xl bg-[#233b33] px-5 py-3 text-sm font-semibold text-white hover:bg-[#304e43] disabled:opacity-60">{downloading ? <LoaderCircle aria-hidden size={17} className="animate-spin" /> : <Download aria-hidden size={17} />}{downloading ? 'Preparing download…' : 'Download original'}</button>}</div>
         {downloadError && <p role="alert" className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-800">{downloadError}</p>}
-        <DocumentPropertiesEditor canWrite document={document} csrf={csrf} onSaved={setDocument} />
+        <RecordReadiness record={document} />
+        <div id="record-properties" className="scroll-mt-6"><DocumentPropertiesEditor canWrite document={document} csrf={csrf} onSaved={setDocument} /></div>
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-stone-200 bg-white"><div className="border-b border-stone-200 px-6 py-4"><h2 className="text-sm font-semibold">Original file preview</h2></div><FilePreview document={document} /></section>
           <aside className="rounded-2xl border border-stone-200 bg-white p-6"><h2 className="font-semibold">About this record</h2><p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-stone-600">{document.description || 'No description has been added.'}</p><dl className="mt-6 space-y-5 border-t border-stone-100 pt-6 text-sm">{[
@@ -120,10 +123,11 @@ export function DocumentDetailPanel({ id, csrf }: { id: number; csrf: string }) 
             ['Record identifier', document.uuid || String(document.id)],
           ].map(([label, value]) => <div key={label}><dt className="text-xs text-stone-500">{label}</dt><dd className="mt-1 break-words">{value}</dd></div>)}</dl></aside>
         </div>
-        <RecordMetadata canWrite key={attempt} id={document.id} typeId={document.document_type?.id} csrf={csrf} />
-        <RecordOrganization key={`organization-${attempt}`} id={document.id} csrf={csrf} />
+        <div id="record-metadata" className="scroll-mt-6"><RecordMetadata canWrite key={attempt} id={document.id} typeId={document.document_type?.id} csrf={csrf} /></div>
+        <div id="record-organization" className="scroll-mt-6"><RecordOrganization key={`organization-${attempt}`} id={document.id} csrf={csrf} /></div>
+        <RecordRelationships key={`relationships-${attempt}`} id={document.id} csrf={csrf} />
         <DocumentWorkflow key={`workflow-${attempt}`} id={document.id} csrf={csrf} onChanged={() => setAttempt(value => value + 1)} />
-        <DocumentVersions canWrite key={`versions-${attempt}`} id={document.id} csrf={csrf} />
+        <div id="record-versions" className="scroll-mt-6"><DocumentVersions canWrite key={`versions-${attempt}`} id={document.id} csrf={csrf} /></div>
         <DocumentComments canWrite key={`comments-${attempt}`} id={document.id} csrf={csrf} />
         <DocumentActivity key={`activity-${attempt}`} id={document.id} />
       </>}

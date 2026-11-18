@@ -48,7 +48,7 @@ export function SignInPage() {
   return (
     <main className="grid min-h-screen bg-stone-50 lg:grid-cols-2">
       <section className="hero-grid relative flex flex-col justify-between overflow-hidden bg-[#233b33] px-8 py-10 text-white sm:px-14 lg:p-16">
-        <Link to="/" className="flex w-fit items-center gap-3 text-xl font-semibold"><Archive aria-hidden size={25} />ArcheoECM</Link>
+        <Link to="/" className="flex w-fit items-center gap-3 text-xl font-semibold"><Archive aria-hidden size={25} />ArcheoVault</Link>
         <div className="relative z-10 max-w-lg py-12 lg:py-24">
           <p className="mb-6 text-xs font-semibold tracking-[0.2em] text-amber-200/80 uppercase">Evidence. Context. Continuity.</p>
           <h1 className="text-4xl leading-tight tracking-tight sm:text-5xl">Return to the records.<br /><span className="font-serif text-amber-100 italic">Continue the discovery.</span></h1>
@@ -64,7 +64,7 @@ export function SignInPage() {
             </p>
           ) : <>
           <p className="mb-3 text-xs font-semibold tracking-[0.18em] text-stone-500 uppercase">Welcome back</p>
-          <h2 className="text-3xl font-semibold tracking-tight">Sign in to ArcheoECM</h2>
+          <h2 className="text-3xl font-semibold tracking-tight">Sign in to ArcheoVault</h2>
           <p className="mt-3 text-sm leading-6 text-stone-600">Continue with your organization account.</p>
           <form onSubmit={submit} className="mt-9 space-y-6" aria-busy={busy}>
             <div>

@@ -7,20 +7,20 @@ export function SiteHeader() {
   return (
     <header className="absolute inset-x-0 top-0 z-20 border-b border-white/10">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-10">
-        <a className="flex items-center gap-3 text-white" href="#top" aria-label="ArcheoECM home">
+        <a className="flex items-center gap-3 text-white" href="#top" aria-label="ArcheoVault home">
           <span className="grid size-10 place-items-center rounded-xl border border-white/15 bg-white/10">
             <Archive aria-hidden="true" size={21} strokeWidth={1.8} />
           </span>
           <span>
             <span className="block text-[0.69rem] font-semibold tracking-[0.22em] text-stone-300 uppercase">Heritage records</span>
-            <span className="block text-lg font-semibold tracking-tight">ArcheoECM</span>
+            <span className="block text-lg font-semibold tracking-tight">ArcheoVault</span>
           </span>
         </a>
 
         <nav className="hidden items-center gap-8 text-sm font-medium text-stone-300 md:flex" aria-label="Main navigation">
           <a className="transition hover:text-white" href="#capabilities">Capabilities</a>
           <a className="transition hover:text-white" href="#record">Record model</a>
-          <a className="transition hover:text-white" href="#value">Why ArcheoECM</a>
+          <a className="transition hover:text-white" href="#value">Why ArcheoVault</a>
         </nav>
 
         <Link

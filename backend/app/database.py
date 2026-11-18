@@ -30,6 +30,21 @@ CREATE TABLE IF NOT EXISTS notifications (
     dedupe_key TEXT UNIQUE
 );
 CREATE INDEX IF NOT EXISTS idx_notification_user ON notifications(username, read_at, created_at DESC);
+CREATE TABLE IF NOT EXISTS document_relationships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_document_id INTEGER NOT NULL,
+    target_document_id INTEGER NOT NULL,
+    relationship_type TEXT NOT NULL CHECK (relationship_type IN (
+        'same_site', 'depicts', 'supports', 'cites', 'supersedes', 'related'
+    )),
+    note TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    CHECK (source_document_id <> target_document_id),
+    UNIQUE (source_document_id, target_document_id, relationship_type)
+);
+CREATE INDEX IF NOT EXISTS idx_relationship_source ON document_relationships(source_document_id);
+CREATE INDEX IF NOT EXISTS idx_relationship_target ON document_relationships(target_document_id);
 """
 
 
@@ -136,3 +151,49 @@ def mark_notification(path: str, username: str, notification_id: int) -> bool:
 def mark_all_notifications(path: str, username: str) -> int:
     return run(path, lambda db: db.execute(
         "UPDATE notifications SET read_at=? WHERE username=? AND read_at IS NULL", (now_iso(), username)).rowcount)
+
+
+def relationship_rows(path: str, document_id: int) -> list[dict]:
+    def query(db):
+        return [dict(row) for row in db.execute(
+            """SELECT * FROM document_relationships
+               WHERE source_document_id=? OR target_document_id=?
+               ORDER BY created_at DESC, id DESC""",
+            (document_id, document_id),
+        ).fetchall()]
+    return run(path, query)
+
+
+def relationship_row(path: str, relationship_id: int) -> dict | None:
+    def query(db):
+        row = db.execute("SELECT * FROM document_relationships WHERE id=?", (relationship_id,)).fetchone()
+        return dict(row) if row else None
+    return run(path, query)
+
+
+def save_relationship(path: str, *, source_id: int, target_id: int, relationship_type: str,
+                      note: str, actor: str) -> dict:
+    # Symmetric links have one canonical orientation, preventing A→B and B→A duplicates.
+    if relationship_type in {"same_site", "related"} and source_id > target_id:
+        source_id, target_id = target_id, source_id
+    def save(db):
+        db.execute(
+            """INSERT INTO document_relationships
+               (source_document_id, target_document_id, relationship_type, note, created_by, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(source_document_id, target_document_id, relationship_type)
+               DO UPDATE SET note=excluded.note""",
+            (source_id, target_id, relationship_type, note, actor, now_iso()),
+        )
+        return dict(db.execute(
+            """SELECT * FROM document_relationships
+               WHERE source_document_id=? AND target_document_id=? AND relationship_type=?""",
+            (source_id, target_id, relationship_type),
+        ).fetchone())
+    return run(path, save)
+
+
+def delete_relationship(path: str, relationship_id: int) -> bool:
+    return run(path, lambda db: db.execute(
+        "DELETE FROM document_relationships WHERE id=?", (relationship_id,),
+    ).rowcount == 1)

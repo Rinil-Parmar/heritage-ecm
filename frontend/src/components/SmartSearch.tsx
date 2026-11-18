@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, FileText, Lightbulb, Search, ShieldCheck, Sparkles } from 'lucide-react'
+import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, FileText, Lightbulb, Search, ShieldCheck, Sparkles, X } from 'lucide-react'
 import { ApiError } from '../api/client'
 import { getSmartSearchPage, getSmartSearchStatus, runSmartSearch, type SmartSearchResult, type SmartSearchStatus } from '../api/smartSearch'
 
@@ -24,6 +24,7 @@ export function SmartSearch({ csrf }: { csrf: string }) {
   const [pageLoading, setPageLoading] = useState(false)
   const [error, setError] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
+  const searchInput = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -74,6 +75,17 @@ export function SmartSearch({ csrf }: { csrf: string }) {
     }
   }
 
+  function clearSearch() {
+    activeRequest.current?.abort()
+    activeRequest.current = null
+    setQuery('')
+    setResult(null)
+    setError('')
+    setLoading(false)
+    setPageLoading(false)
+    requestAnimationFrame(() => searchInput.current?.focus())
+  }
+
   const examples = status?.examples?.length ? status.examples : FALLBACK_EXAMPLES
   return (
     <div className="space-y-7">
@@ -83,14 +95,17 @@ export function SmartSearch({ csrf }: { csrf: string }) {
         <div className="relative max-w-3xl">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-amber-100"><Sparkles aria-hidden size={14} />Assisted discovery</div>
           <h1 className="font-serif text-4xl tracking-tight sm:text-5xl">Ask your archive.</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-stone-200 sm:text-base">Describe the records you need in everyday language. ArcheoECM turns your request into verified archive filters and shows only records your account can access.</p>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-stone-200 sm:text-base">Describe the records you need in everyday language. ArcheoVault turns your request into verified archive filters and shows only records your account can access.</p>
           <form onSubmit={search} className="mt-8">
             <label htmlFor="smart-search" className="sr-only">Describe the documents you want to find</label>
             <div className="rounded-2xl bg-white p-2 shadow-xl shadow-black/10 focus-within:ring-3 focus-within:ring-amber-200/40">
-              <div className="flex items-start gap-2">
-                <Search aria-hidden size={20} className="mt-3.5 ml-3 shrink-0 text-stone-400" />
-                <textarea id="smart-search" value={query} onChange={event => setQuery(event.target.value)} maxLength={500} rows={2} placeholder="Find excavation reports from Canada created between 2023 and 2025…" className="min-h-16 flex-1 resize-none border-0 bg-transparent px-2 py-3 text-sm leading-6 text-stone-900 outline-none placeholder:text-stone-400 sm:text-base" />
-                <button disabled={loading || query.trim().length < 2} className="mt-1 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#b48b35] px-5 text-sm font-semibold text-white hover:bg-[#9c762b] disabled:cursor-not-allowed disabled:opacity-50">{loading ? 'Searching…' : 'Search'}<ArrowRight aria-hidden size={16} /></button>
+              <div className="grid items-center gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+                <Search aria-hidden size={20} className="ml-3 hidden shrink-0 text-stone-400 sm:block" />
+                <textarea ref={searchInput} id="smart-search" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && query) clearSearch() }} maxLength={500} rows={2} placeholder="Example: Excavation reports from Canada between 2023 and 2025" className="min-h-16 w-full resize-none border-0 bg-transparent px-3 py-3 text-sm leading-6 text-stone-900 outline-none placeholder:text-stone-400 sm:text-base" />
+                <div className="flex items-center justify-end gap-2 self-stretch sm:self-center">
+                  {(query || result || error) && <button type="button" onClick={clearSearch} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-stone-600 hover:bg-stone-100 hover:text-stone-900"><X aria-hidden size={16} />{loading ? 'Cancel' : 'Clear'}</button>}
+                  <button disabled={loading || query.trim().length < 2} className="inline-flex min-h-12 min-w-28 items-center justify-center gap-2 rounded-xl bg-[#b48b35] px-5 text-sm font-semibold text-white hover:bg-[#9c762b] disabled:cursor-not-allowed disabled:opacity-50">{loading ? 'Searching…' : 'Search'}<ArrowRight aria-hidden size={16} /></button>
+                </div>
               </div>
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-stone-300">

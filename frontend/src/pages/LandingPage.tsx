@@ -84,7 +84,7 @@ export function LandingPage() {
                 Preserve the record.<br /><span className="font-serif font-normal italic text-amber-200">Carry the story forward.</span>
               </h1>
               <p className="mt-7 max-w-2xl text-lg leading-8 text-stone-300 sm:text-xl">
-                ArcheoECM helps archaeology and historical research teams collect, classify, review, discover, and preserve the documents behind their work.
+                ArcheoVault helps archaeology and historical research teams collect, classify, review, discover, and preserve the documents behind their work.
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <a className="inline-flex items-center justify-center gap-2 rounded-full bg-amber-300 px-6 py-3.5 text-sm font-bold text-stone-950 transition hover:bg-amber-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300" href="#record">
@@ -142,7 +142,7 @@ export function LandingPage() {
 
         <section id="capabilities" className="scroll-mt-8 py-20 sm:py-28">
           <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
-            <SectionHeading eyebrow="Core capabilities" title="Everything essential to a trustworthy research record" body="ArcheoECM brings the full document lifecycle together, from initial submission and research classification to review, retrieval, and controlled preservation." />
+            <SectionHeading eyebrow="Core capabilities" title="Everything essential to a trustworthy research record" body="ArcheoVault brings the full document lifecycle together, from initial submission and research classification to review, retrieval, and controlled preservation." />
             <div className="mt-12 grid gap-px overflow-hidden rounded-3xl border border-stone-200 bg-stone-200 md:grid-cols-2 lg:grid-cols-3">
               {capabilities.map(({ icon: Icon, title, body }) => (
                 <article className="bg-white p-7 sm:p-8" key={title}>
@@ -184,7 +184,7 @@ export function LandingPage() {
 
       <footer className="border-t border-stone-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-sm text-stone-500 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
-          <p><span className="font-semibold text-stone-800">ArcheoECM</span> · Heritage document management</p>
+          <p><span className="font-semibold text-stone-800">ArcheoVault</span> · Heritage document management</p>
           <Link className="font-medium text-stone-600 transition hover:text-stone-950" to={SIGN_IN_URL}>Organization sign in</Link>
         </div>
       </footer>

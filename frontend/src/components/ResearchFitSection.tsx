@@ -37,7 +37,7 @@ export function ResearchFitSection() {
                 Research records carry meaning beyond the file.
               </h2>
               <p className="mt-6 max-w-xl leading-7 text-emerald-50/75">
-                ArcheoECM is structured around the context archaeology and historical research teams need to preserve, discover, and govern their evidence.
+                ArcheoVault is structured around the context archaeology and historical research teams need to preserve, discover, and govern their evidence.
               </p>
             </div>
           </div>

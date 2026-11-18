@@ -1,1 +1,1 @@
-"""Read-only effective access API for ArcheoECM."""
+"""Read-only effective access API for ArcheoVault."""

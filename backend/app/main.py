@@ -19,6 +19,7 @@ from app.workflows import queue_router as review_queue_router, router as workflo
 from app.smart_search import router as smart_search_router
 from app.notifications import router as notifications_router
 from app.access_control import router as access_control_router
+from app.relationships import router as relationships_router
 
 
 class HealthResponse(BaseModel):
@@ -41,7 +42,7 @@ async def lifespan(app: FastAPI):
         await app.state.upstream_http.aclose()
 
 
-app = FastAPI(title="ArcheoECM API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="ArcheoVault API", version="0.1.0", lifespan=lifespan)
 app.state.settings = settings
 app.state.sessions = SessionStore()
 app.include_router(router)
@@ -56,6 +57,7 @@ app.include_router(review_queue_router)
 app.include_router(smart_search_router)
 app.include_router(notifications_router)
 app.include_router(access_control_router)
+app.include_router(relationships_router)
 
 
 @app.exception_handler(RequestValidationError)

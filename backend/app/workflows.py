@@ -14,11 +14,17 @@ from app.database import (
 )
 from app.documents import check_upstream, read_detail
 from app.uploads import all_rows, call, require_write
+from app.access_control import ensure_reviewer_access
 
 router = APIRouter(prefix="/api/v1/records", tags=["Document review"])
 queue_router = APIRouter(prefix="/api/v1/reviews", tags=["Review queue"])
 REVIEW_WORKFLOW = "research_document_review"
 REVIEW_MANAGER_GROUPS = {"System Administrators", "Department Administrators"}
+REVIEW_ASSIGNEE_ROLES = {
+    "Research Professors": "Research Professor",
+    "Department Administrators": "Department Administrator",
+    "Research Assistants": "Research Assistant",
+}
 
 
 class TransitionInput(BaseModel):
@@ -48,18 +54,45 @@ async def review_manager(request: Request):
 
 
 async def eligible_assignees(request: Request):
-    # Responsibility may be assigned before group access is finalized. Assignment
-    # never grants document or transition access; Mayan remains authoritative.
-    users = []
-    for user in await all_rows(request, "/users/"):
-        username = str(user.get("username") or "")
-        if not username or not user.get("is_active", True):
+    """Return active members of roles that are allowed to perform reviews."""
+    users_by_id = {
+        int(user["id"]): user for user in await all_rows(request, "/users/")
+        if user.get("id") is not None and user.get("username") and user.get("is_active", True)
+    }
+    groups = {
+        str(group["name"]): group for group in await all_rows(request, "/groups/")
+        if group.get("name") in REVIEW_ASSIGNEE_ROLES
+    }
+    roles = {
+        str(role["label"]): role for role in await all_rows(request, "/roles/")
+        if role.get("label") in REVIEW_ASSIGNEE_ROLES.values()
+    }
+    candidates = {}
+    for group_name, role_label in REVIEW_ASSIGNEE_ROLES.items():
+        group = groups.get(group_name)
+        role = roles.get(role_label)
+        if not group or not role:
             continue
-        full_name = str(user.get("full_name") or "").strip()
-        if not full_name:
-            full_name = " ".join(str(user.get(key) or "").strip() for key in ("first_name", "last_name")).strip()
-        users.append({"id": int(user["id"]), "username": username, "label": full_name or username})
-    return sorted(users, key=lambda row: (row["label"].casefold(), row["username"].casefold()))
+        linked = await all_rows(request, f"/roles/{int(role['id'])}/groups/")
+        if group_name not in {str(row.get('name')) for row in linked}:
+            continue
+        for member in await all_rows(request, f"/groups/{int(group['id'])}/users/"):
+            user = users_by_id.get(int(member["id"]))
+            if not user:
+                continue
+            username = str(user["username"])
+            full_name = str(user.get("full_name") or "").strip()
+            if not full_name:
+                full_name = " ".join(
+                    str(user.get(key) or "").strip() for key in ("first_name", "last_name")
+                ).strip()
+            candidates.setdefault(username.casefold(), {
+                "id": int(user["id"]), "username": username, "label": full_name or username,
+                "role_id": int(role["id"]), "role_label": role_label, "group_name": group_name,
+            })
+    return sorted(
+        candidates.values(), key=lambda row: (row["label"].casefold(), row["username"].casefold())
+    )
 
 
 def state_value(value):
@@ -185,6 +218,36 @@ def queue_item(document: dict, instance: dict, assignment: dict | None = None):
         "last_action": last_action,
         "assignment": assignment,
     }
+
+
+def transition_notifications(
+    *, document_id: int, transition_label: str, state_label: str,
+    actor: str, assignment: dict,
+):
+    """Describe the assignment handoff without notifying the actor themself."""
+    normalized_transition = transition_label.casefold()
+    normalized_state = state_label.casefold()
+    if "correction" in normalized_state:
+        title = "Corrections requested"
+        body = f"{actor} requested corrections for Document #{document_id}. Open the record to review the instructions."
+    elif "resubmit" in normalized_transition:
+        title = "Corrections resubmitted"
+        body = f"{actor} resubmitted Document #{document_id}. It is ready for review again."
+    elif "approve" in normalized_transition or normalized_state == "approved":
+        title = "Review approved"
+        body = f"{actor} approved Document #{document_id}. The review is complete."
+    else:
+        title = f"Review moved to {state_label}"
+        body = f"{actor} moved Document #{document_id} to {state_label}. Open it to see the latest action."
+
+    recipients = []
+    seen = {actor.casefold()}
+    for username in (assignment.get("assigned_by"), assignment.get("assignee_username")):
+        value = str(username or "").strip()
+        if value and value.casefold() not in seen:
+            recipients.append(value)
+            seen.add(value.casefold())
+    return [{"username": username, "title": title, "body": body} for username in recipients]
 
 
 async def assigned_queue(request: Request, username: str):
@@ -354,14 +417,25 @@ async def execute_transition(
     assignment = assignments.get(workflow_instance_id)
     if assignment and updated.get("current_state"):
         state = updated["current_state"]
-        add_notification(
-            settings_for(request).database_path,
-            username=assignment["assignee_username"], kind="workflow",
-            title=f"Review moved to {state['label']}",
-            body=f"Document #{document_id} changed review state. Open it to see the latest action.",
-            document_id=document_id,
-            dedupe_key=f"workflow:{workflow_instance_id}:state:{state['id']}:{updated.get('last_log_entry', {}).get('datetime') if updated.get('last_log_entry') else ''}",
+        actor = session_username(request)
+        event_time = (
+            updated.get("last_log_entry", {}).get("datetime")
+            if updated.get("last_log_entry") else ""
         )
+        for notice in transition_notifications(
+            document_id=document_id,
+            transition_label=str(transition.get("label") or "Review updated"),
+            state_label=str(state["label"]), actor=actor, assignment=assignment,
+        ):
+            add_notification(
+                settings_for(request).database_path,
+                username=notice["username"], kind="workflow",
+                title=notice["title"], body=notice["body"], document_id=document_id,
+                dedupe_key=(
+                    f"workflow:{workflow_instance_id}:state:{state['id']}:{event_time}:"
+                    f"{notice['username'].casefold()}"
+                ),
+            )
     return updated
 
 
@@ -392,9 +466,17 @@ async def assign_review(request: Request, workflow_instance_id: int, body: Assig
     instance = next((row for row in instances if row["id"] == workflow_instance_id), None)
     if instance is None or (instance.get("current_state") or {}).get("final"):
         raise HTTPException(409, "Only an active review workflow can be assigned.")
-    available = {row["username"] for row in await eligible_assignees(request)}
-    if body.assignee_username not in available:
-        raise HTTPException(422, "Choose an active user account visible to your administrator account.")
+    available = {row["username"]: row for row in await eligible_assignees(request)}
+    assignee = available.get(body.assignee_username)
+    if assignee is None:
+        raise HTTPException(
+            422, "Choose an active Department Administrator, Research Professor, or Research Assistant."
+        )
+    # Assignment and access are one operation from the manager's perspective.
+    # Add the reviewer permissions without removing contributor permissions the
+    # role may already have. Every member of the role receives the ACL; only the
+    # selected person receives responsibility and notifications.
+    await ensure_reviewer_access(request, body.document_id, int(assignee["role_id"]))
     actor = await review_manager(request)
     previous = assignment_map(settings_for(request).database_path, [workflow_instance_id]).get(workflow_instance_id)
     assignment = save_assignment(
