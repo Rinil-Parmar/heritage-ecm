@@ -15,7 +15,7 @@ const contextPoints = [
 
 export function RecordContextSection() {
   return (
-    <section id="record" className="scroll-mt-8 overflow-hidden bg-[#eee9df] py-20 sm:py-28">
+    <section id="record" className="record-context scroll-mt-8 overflow-hidden bg-[#eee9df] py-20 sm:py-28">
       <div className="mx-auto grid max-w-7xl items-center gap-14 px-5 sm:px-8 lg:grid-cols-[0.82fr_1.18fr] lg:gap-20 lg:px-10">
         <div>
           <p className="text-xs font-bold tracking-[0.18em] text-[#8a682d] uppercase">One record, complete context</p>

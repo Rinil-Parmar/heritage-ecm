@@ -45,6 +45,24 @@ CREATE TABLE IF NOT EXISTS document_relationships (
 );
 CREATE INDEX IF NOT EXISTS idx_relationship_source ON document_relationships(source_document_id);
 CREATE INDEX IF NOT EXISTS idx_relationship_target ON document_relationships(target_document_id);
+CREATE TABLE IF NOT EXISTS access_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor TEXT NOT NULL,
+    scope TEXT NOT NULL CHECK (scope IN ('document', 'cabinet')),
+    object_id INTEGER NOT NULL,
+    role_id INTEGER NOT NULL,
+    role_label TEXT NOT NULL,
+    bundle TEXT NOT NULL,
+    permission_count INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_access_audit_object
+    ON access_audit(scope, object_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS document_stewards (
+    document_id INTEGER PRIMARY KEY,
+    username TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -197,3 +215,54 @@ def delete_relationship(path: str, relationship_id: int) -> bool:
     return run(path, lambda db: db.execute(
         "DELETE FROM document_relationships WHERE id=?", (relationship_id,),
     ).rowcount == 1)
+
+
+def add_access_audit(path: str, *, actor: str, scope: str, object_id: int,
+                     role_id: int, role_label: str, bundle: str,
+                     permission_count: int) -> dict:
+    def add(db):
+        cursor = db.execute(
+            """INSERT INTO access_audit
+               (actor, scope, object_id, role_id, role_label, bundle,
+                permission_count, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (actor, scope, object_id, role_id, role_label, bundle,
+             permission_count, now_iso()),
+        )
+        return dict(db.execute(
+            "SELECT * FROM access_audit WHERE id=?", (cursor.lastrowid,),
+        ).fetchone())
+    return run(path, add)
+
+
+def access_audit_rows(path: str, scope: str, object_id: int,
+                      limit: int = 25) -> list[dict]:
+    def query(db):
+        return [dict(row) for row in db.execute(
+            """SELECT * FROM access_audit
+               WHERE scope=? AND object_id=?
+               ORDER BY created_at DESC, id DESC LIMIT ?""",
+            (scope, object_id, limit),
+        ).fetchall()]
+    return run(path, query)
+
+
+def save_document_steward(path: str, document_id: int, username: str) -> None:
+    def save(db):
+        db.execute(
+            """INSERT INTO document_stewards(document_id, username, created_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(document_id) DO NOTHING""",
+            (document_id, username, now_iso()),
+        )
+    run(path, save)
+
+
+def document_steward(path: str, document_id: int) -> str | None:
+    def query(db):
+        row = db.execute(
+            "SELECT username FROM document_stewards WHERE document_id=?",
+            (document_id,),
+        ).fetchone()
+        return str(row["username"]) if row else None
+    return run(path, query)

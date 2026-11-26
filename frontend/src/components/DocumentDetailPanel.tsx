@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Download, FileText, LoaderCircle, RefreshCw } from 'lucide-react'
-import { getDocument, getDocumentFile, type DocumentDetail } from '../api/documents'
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileText, LoaderCircle, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react'
+import { getDocument, getDocumentFile, getPreviewPageImage, getPreviewPages, type DocumentDetail, type PreviewPageList } from '../api/documents'
 import { ApiError } from '../api/client'
 import { RecordMetadata } from './RecordMetadata'
 import { RecordOrganization } from './RecordOrganization'
@@ -26,38 +26,67 @@ function size(bytes: number | null) {
 
 function FilePreview({ document }: { document: DocumentDetail }) {
   const navigate = useNavigate()
+  const [pages, setPages] = useState<PreviewPageList | null>(null)
+  const [pageIndex, setPageIndex] = useState(0)
+  const [width, setWidth] = useState(1400)
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
   const [retry, setRetry] = useState(0)
   const file = document.file_latest
-  const mime = file?.mimetype.toLowerCase().split(';')[0].trim() || ''
-  const supported = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mime)
-  const withinLimit = file?.size != null && file.size <= 20 * 1024 * 1024
 
   useEffect(() => {
-    setUrl('')
-    setError('')
-    if (!file || !supported || !withinLimit) return
+    setPages(null); setPageIndex(0); setError('')
+    if (!file) return
     const controller = new AbortController()
-    let objectUrl = ''
-    getDocumentFile(document.id, true, controller.signal).then(blob => {
-      if (controller.signal.aborted) return
-      objectUrl = URL.createObjectURL(blob)
-      setUrl(objectUrl)
+    getPreviewPages(document.id, controller.signal).then(result => {
+      if (!controller.signal.aborted) setPages(result)
     }).catch(cause => {
       if (controller.signal.aborted) return
       if (cause instanceof ApiError && cause.status === 401) navigate('/sign-in', { replace: true })
-      else setError(cause instanceof ApiError ? cause.message : 'Unable to load the preview. Please try again.')
+      else setError(cause instanceof ApiError ? cause.message : 'Unable to prepare this document preview.')
     })
-    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [document.id, file, supported, withinLimit, retry, navigate])
+    return () => controller.abort()
+  }, [document.id, file, retry, navigate])
 
-  if (!file || !supported || !withinLimit) return <div className="px-6 py-20 text-center"><FileText aria-hidden size={40} className="mx-auto text-stone-400" /><h3 className="mt-5 font-semibold">{!file ? 'No file attached yet' : 'Download to view this file'}</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-stone-500">{!file ? 'This record does not have an original file available.' : 'Inline preview supports PDFs and common images up to 20 MB. You can download the original file above.'}</p></div>
+  useEffect(() => {
+    setUrl('')
+    if (!pages?.results[pageIndex]) return
+    const controller = new AbortController()
+    let objectUrl = ''
+    const page = pages.results[pageIndex]
+    void (async () => {
+      let cause: unknown
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const blob = await getPreviewPageImage(document.id, pages.version_id, page.id, width, page.image_hash, controller.signal)
+          if (controller.signal.aborted) return
+          objectUrl = URL.createObjectURL(blob)
+          setUrl(objectUrl)
+          return
+        } catch (problem) {
+          cause = problem
+          if (controller.signal.aborted) return
+          if (!(problem instanceof ApiError) || problem.status !== 503 || attempt === 2) break
+          await new Promise<void>(resolve => window.setTimeout(resolve, attempt === 0 ? 1500 : 4000))
+        }
+      }
+      if (cause instanceof ApiError && cause.status === 401) navigate('/sign-in', { replace: true })
+      else setError(cause instanceof ApiError ? cause.message : 'Unable to load the preview. Please try again.')
+    })()
+    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [document.id, pages, pageIndex, width, navigate])
+
+  if (!file) return <div className="px-6 py-20 text-center"><FileText aria-hidden size={40} className="mx-auto text-stone-400" /><h3 className="mt-5 font-semibold">No file attached yet</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-stone-500">This record does not have an original file available.</p></div>
   if (error) return <div role="alert" className="p-8"><p className="text-sm leading-6 text-stone-600">{error}</p><button onClick={() => setRetry(value => value + 1)} className="mt-4 text-sm font-semibold underline">Retry preview</button></div>
-  if (!url) return <p role="status" className="flex items-center justify-center gap-3 py-24 text-sm text-stone-500"><LoaderCircle aria-hidden size={18} className="animate-spin" />Loading preview…</p>
-  return mime === 'application/pdf'
-    ? <iframe title={`Preview: ${document.label}`} src={url} className="h-[70vh] min-h-96 w-full border-0 bg-stone-100" />
-    : <div className="flex min-h-80 items-center justify-center bg-stone-100 p-5"><img src={url} alt={document.label || 'Document preview'} onError={() => setError('This image could not be displayed. Download the original instead.')} className="max-h-[70vh] max-w-full object-contain" /></div>
+  if (pages && !pages.count) return <div className="p-10 text-center"><FileText aria-hidden size={36} className="mx-auto text-stone-400" /><p className="mt-4 text-sm text-stone-600">Mayan has not generated preview pages for this file yet. Refresh shortly or download the original.</p></div>
+  if (!pages || !url) return <p role="status" className="flex items-center justify-center gap-3 py-24 text-sm text-stone-500"><LoaderCircle aria-hidden size={18} className="animate-spin" />Preparing page preview…</p>
+  return <div className="bg-stone-100">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 bg-white px-4 py-3">
+      <div className="flex items-center gap-2"><button aria-label="Previous page" disabled={pageIndex === 0} onClick={() => setPageIndex(value => Math.max(0, value - 1))} className="rounded-lg border border-stone-200 p-2 disabled:opacity-40"><ChevronLeft size={16} /></button><span className="min-w-24 text-center text-sm font-medium">Page {pageIndex + 1} of {pages.count}</span><button aria-label="Next page" disabled={pageIndex >= pages.count - 1} onClick={() => setPageIndex(value => Math.min(pages.count - 1, value + 1))} className="rounded-lg border border-stone-200 p-2 disabled:opacity-40"><ChevronRight size={16} /></button></div>
+      <div className="flex items-center gap-2"><button aria-label="Zoom out" disabled={width <= 800} onClick={() => setWidth(value => Math.max(800, value - 300))} className="rounded-lg border border-stone-200 p-2 disabled:opacity-40"><ZoomOut size={16} /></button><span className="text-xs text-stone-500">{Math.round(width / 14)}%</span><button aria-label="Zoom in" disabled={width >= 2300} onClick={() => setWidth(value => Math.min(2300, value + 300))} className="rounded-lg border border-stone-200 p-2 disabled:opacity-40"><ZoomIn size={16} /></button></div>
+    </div>
+    <div className="flex min-h-[55vh] max-h-[75vh] items-start justify-center overflow-auto p-5"><img src={url} alt={`${document.label || 'Document'} — page ${pageIndex + 1}`} onError={() => setError('This page image could not be displayed. Try again or download the original.')} className="h-auto max-w-none rounded-sm bg-white shadow-lg" style={{ width: `${Math.min(width, 2300)}px` }} /></div>
+  </div>
 }
 
 export function DocumentDetailPanel({ id, csrf }: { id: number; csrf: string }) {

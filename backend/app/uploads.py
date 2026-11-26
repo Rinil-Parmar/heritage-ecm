@@ -9,8 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, PositiveInt
 from starlette.datastructures import UploadFile
 
-from app.auth import COOKIE_NAME, store_for, trusted_origin
+from app.auth import COOKIE_NAME, settings_for, store_for, trusted_origin
 from app.documents import check_upstream, read_detail, upstream_access
+from app.database import save_document_steward
 
 router = APIRouter(prefix="/api/v1", tags=["Upload and metadata"])
 MAX_FILE = 50 * 1024 * 1024
@@ -29,14 +30,18 @@ def require_write(request: Request):
 async def call(request: Request, method: str, path: str, **kwargs):
     settings, headers = upstream_access(request)
     timeout = kwargs.pop("timeout", settings.request_timeout)
+    extra_headers = kwargs.pop("headers", {})
     client = getattr(request.app.state, "upstream_http", None)
     owns_client = client is None
     if owns_client:
         client = httpx.AsyncClient(timeout=settings.request_timeout, follow_redirects=False)
     try:
         try:
-            return await client.request(method, str(settings.mayan_api_url).rstrip("/") + path,
-                                        headers={**headers, "Accept": "application/json"}, timeout=timeout, **kwargs)
+            return await client.request(
+                method, str(settings.mayan_api_url).rstrip("/") + path,
+                headers={**headers, "Accept": "application/json", **extra_headers},
+                timeout=timeout, **kwargs,
+            )
         except httpx.HTTPError:
             raise HTTPException(503, "The upstream service did not respond in time. Please try again.") from None
     finally:
@@ -489,5 +494,10 @@ async def upload(request: Request):
         result = {"document_id": document_id, "metadata_saved": False, "organization_saved": False,
                   "errors": ["Record created. Additional fields and assignments are not yet confirmed."]}
         operations[operation_key]["result"] = result
+        session = store_for(request).get(request.cookies.get(COOKIE_NAME))
+        if session:
+            save_document_steward(
+                settings_for(request).database_path, document_id, session.username,
+            )
         result.update(await finish_capture(request, document_id, body.metadata, fields, body))
         return result

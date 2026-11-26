@@ -1,17 +1,11 @@
-import { ApiError } from './client'
+import { ApiError, requestJson } from './client'
 
 export interface MetadataField { id: number; label: string; required: boolean; constrained: boolean }
 export interface UploadResult { document_id: number; metadata_saved: boolean; organization_saved: boolean; errors: string[] }
 export interface OrganizationOption { id: number; label: string; full_path?: string; color?: string; parent_id?: number | null; depth?: number }
 
 export async function captureRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api/v1/${path}`, { ...options, credentials: 'same-origin', cache: 'no-store' })
-  const body = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new ApiError(typeof body?.detail === 'string' ? body.detail : 'Unable to complete this request. Please try again.', response.status)
-  }
-  if (!body) throw new Error('The service returned an unexpected response.')
-  return body as T
+  return requestJson<T>(`/api/v1/${path}`, options)
 }
 
 export function uploadDocument(file: File, details: object, csrf: string, key: string, onProgress: (value: number) => void): Promise<UploadResult> {

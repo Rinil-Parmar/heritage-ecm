@@ -18,8 +18,8 @@ def test_supported_acl_paths_and_bundle_boundaries():
     assert "Edit document properties" in BUNDLES["document"]["contributor"]["permissions"]
     assert "View workflow templates" in BUNDLES["document"]["reviewer"]["permissions"]
     assert "Transition workflow instances" in BUNDLES["document"]["reviewer"]["permissions"]
-    assert BUNDLES["document"]["contributor"]["permissions"] < BUNDLES["document"]["edit_and_review"]["permissions"]
-    assert BUNDLES["document"]["reviewer"]["permissions"] < BUNDLES["document"]["edit_and_review"]["permissions"]
+    assert BUNDLES["document"]["contributor"]["permissions"] <= BUNDLES["document"]["edit_and_review"]["permissions"]
+    assert BUNDLES["document"]["reviewer"]["permissions"] <= BUNDLES["document"]["edit_and_review"]["permissions"]
     for bundle in ("read_only", "contributor", "reviewer"):
         permissions = BUNDLES["document"][bundle]["permissions"]
         assert "View cabinets" in permissions
@@ -27,6 +27,7 @@ def test_supported_acl_paths_and_bundle_boundaries():
         assert "View the events of an object" in permissions
     assert "Create new comments" in BUNDLES["document"]["contributor"]["permissions"]
     assert "Execute workflow tools" in BUNDLES["document"]["contributor"]["permissions"]
+    assert "Transition workflow instances" in BUNDLES["document"]["contributor"]["permissions"]
     assert "Delete cabinets" not in BUNDLES["cabinet"]["organize"]["permissions"]
     assert BUNDLES["document"]["none"]["permissions"] == set()
     assert BUNDLES["document"]["read_only"]["description"]

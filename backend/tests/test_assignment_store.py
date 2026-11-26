@@ -1,6 +1,7 @@
 from app.database import (
     add_notification, assignment_map, assignments_for_user, delete_assignment, mark_notification,
-    notification_rows, save_assignment, unread_count,
+    document_steward, notification_rows, save_assignment, save_document_steward,
+    unread_count,
 )
 
 
@@ -29,3 +30,10 @@ def test_assignment_and_notification_lifecycle(tmp_path):
     assert mark_notification(path, "professor", rows[0]["id"])
     assert unread_count(path, "professor") == 0
     assert delete_assignment(path, 7) == 1
+
+
+def test_first_uploader_remains_document_steward(tmp_path):
+    path = str(tmp_path / "application.db")
+    save_document_steward(path, 5, "assistant")
+    save_document_steward(path, 5, "administrator")
+    assert document_steward(path, 5) == "assistant"

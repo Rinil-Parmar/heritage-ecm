@@ -1,4 +1,4 @@
-from app.workflows import queue_item, transition_notifications
+from app.workflows import queue_item, transition_allowed, transition_notifications
 
 
 def test_queue_item_preserves_assignment_and_transformed_actor():
@@ -26,16 +26,15 @@ def test_queue_item_preserves_assignment_and_transformed_actor():
     assert result["state"]["label"] == "Under Review"
 
 
-def test_correction_notifies_assigning_manager_not_acting_reviewer():
+def test_correction_notifies_steward_and_assigning_manager_not_acting_reviewer():
     notices = transition_notifications(
         document_id=5, transition_label="Request Correction",
         state_label="Needs Correction", actor="professor",
         assignment={"assigned_by": "admin", "assignee_username": "professor"},
+        steward_username="assistant",
     )
-    assert notices == [{
-        "username": "admin", "title": "Corrections requested",
-        "body": "professor requested corrections for Document #5. Open the record to review the instructions.",
-    }]
+    assert [notice["username"] for notice in notices] == ["assistant", "admin"]
+    assert all(notice["title"] == "Corrections requested" for notice in notices)
 
 
 def test_resubmission_notifies_reviewer_and_approval_notifies_manager():
@@ -52,3 +51,13 @@ def test_resubmission_notifies_reviewer_and_approval_notifies_manager():
     assert resubmitted[0]["title"] == "Corrections resubmitted"
     assert [row["username"] for row in approved] == ["admin"]
     assert approved[0]["title"] == "Review approved"
+
+
+def test_review_transition_policy_separates_assistant_and_professor_actions():
+    assert transition_allowed({"Research Assistants"}, "Resubmit for Review")
+    assert not transition_allowed({"Research Assistants"}, "Approve Document")
+    assert transition_allowed({"Research Professors"}, "Approve Document")
+    assert transition_allowed({"Research Professors"}, "Request Correction")
+    assert not transition_allowed({"Research Professors"}, "Resubmit for Review")
+    assert transition_allowed({"Department Administrators"}, "Approve Document")
+    assert transition_allowed({"System Administrators"}, "Resubmit for Review")

@@ -39,8 +39,10 @@ rollback() {
 trap rollback ERR
 docker compose -p archeoecm-application -f "$compose" up -d --wait --wait-timeout 180
 curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8082/api/v1/health
+curl --fail --silent --show-error --max-time 20 http://127.0.0.1:8082/api/v1/health/ready
 curl --fail --silent --show-error --max-time 15 --output /dev/null http://127.0.0.1:8082/portal/
 curl --fail --silent --show-error --max-time 15 https://archeoecm.cs.uwindsor.ca/api/v1/health
+curl --fail --silent --show-error --max-time 20 https://archeoecm.cs.uwindsor.ca/api/v1/health/ready
 curl --fail --silent --show-error --max-time 15 --output /dev/null https://archeoecm.cs.uwindsor.ca/portal/
 printf '%s\n' "$release" > "$root/current-release.tmp"
 mv "$root/current-release.tmp" "$root/current-release"

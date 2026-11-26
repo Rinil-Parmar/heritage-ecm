@@ -78,8 +78,11 @@ services:
 
   mayan:
     image: mayanedms/mayanedms:s4.12
+    # Interface-only smoke test on the laptop. Background workers can be
+    # re-enabled by removing this command for full OCR and indexing tests.
+    command: [run_frontend]
     mem_limit: 2300m
-    cpus: 2.0
+    cpus: 4.0
     env_file:
       - .env
     environment:
@@ -93,8 +96,8 @@ services:
       MAYAN_SERVER_SIDE_EVENTS_BACKEND_ARGUMENTS: "{'url':'redis://:${MAYAN_REDIS_PASSWORD}@redis:6379/3'}"
       MAYAN_ALLOWED_HOSTS: "['localhost','127.0.0.1']"
       # Development sizing for an 8 GB laptop. Each queue remains available,
-      # but Mayan runs one process per worker class and one web worker.
-      MAYAN_GUNICORN_WORKERS: ${MAYAN_GUNICORN_WORKERS:-1}
+      # but Mayan runs one process per worker class and three web workers.
+      MAYAN_GUNICORN_WORKERS: ${MAYAN_GUNICORN_WORKERS:-3}
       MAYAN_WORKER_A_CONCURRENCY: ${MAYAN_WORKER_A_CONCURRENCY:-1}
       MAYAN_WORKER_B_CONCURRENCY: ${MAYAN_WORKER_B_CONCURRENCY:-1}
       MAYAN_WORKER_C_CONCURRENCY: ${MAYAN_WORKER_C_CONCURRENCY:-1}

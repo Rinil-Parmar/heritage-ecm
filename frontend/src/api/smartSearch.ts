@@ -10,6 +10,7 @@ export interface SmartSearchStatus {
 
 export interface SearchPlan {
   keywords: string
+  content_mode: ContentMode
   created_from: string | null
   created_to: string | null
   document_type_id: number | null
@@ -18,6 +19,8 @@ export interface SearchPlan {
   metadata: { field: string; value: string }[]
   explanation: string
 }
+
+export type ContentMode = 'all_terms' | 'exact_phrase'
 
 export interface SmartSearchResult {
   mode: 'ai' | 'standard'
@@ -43,11 +46,11 @@ export function getSmartSearchStatus(signal?: AbortSignal) {
   return captureRequest<SmartSearchStatus>('smart-search/status', { signal })
 }
 
-export function runSmartSearch(query: string, csrf: string, signal?: AbortSignal) {
+export function runSmartSearch(query: string, contentMode: ContentMode, csrf: string, signal?: AbortSignal) {
   return captureRequest<SmartSearchResult>('smart-search', {
     method: 'POST', signal,
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, content_mode: contentMode }),
   })
 }
 

@@ -10,7 +10,7 @@ from app.auth import COOKIE_NAME, settings_for, store_for, trusted_origin
 from app.administration import current_identity
 from app.database import (
     add_notification, assignment_map, assignments_for_user, delete_assignment,
-    save_assignment,
+    document_steward, save_assignment,
 )
 from app.documents import check_upstream, read_detail
 from app.uploads import all_rows, call, require_write
@@ -222,7 +222,7 @@ def queue_item(document: dict, instance: dict, assignment: dict | None = None):
 
 def transition_notifications(
     *, document_id: int, transition_label: str, state_label: str,
-    actor: str, assignment: dict,
+    actor: str, assignment: dict, steward_username: str | None = None,
 ):
     """Describe the assignment handoff without notifying the actor themself."""
     normalized_transition = transition_label.casefold()
@@ -242,12 +242,26 @@ def transition_notifications(
 
     recipients = []
     seen = {actor.casefold()}
-    for username in (assignment.get("assigned_by"), assignment.get("assignee_username")):
+    for username in (
+        steward_username, assignment.get("assigned_by"),
+        assignment.get("assignee_username"),
+    ):
         value = str(username or "").strip()
         if value and value.casefold() not in seen:
             recipients.append(value)
             seen.add(value.casefold())
     return [{"username": username, "title": title, "body": body} for username in recipients]
+
+
+def transition_allowed(groups: set[str], transition_label: str) -> bool:
+    """Apply the product review policy on top of Mayan's object permission."""
+    label = transition_label.casefold()
+    is_manager = bool(groups & REVIEW_MANAGER_GROUPS)
+    if "resubmit" in label:
+        return is_manager or "Research Assistants" in groups
+    if any(value in label for value in ("approve", "correction", "start review")):
+        return is_manager or "Research Professors" in groups
+    return is_manager
 
 
 async def assigned_queue(request: Request, username: str):
@@ -383,6 +397,9 @@ async def execute_transition(
     )
     if transition is None:
         raise HTTPException(409, "This review action is no longer available. Refresh the workflow.")
+    identity = await current_identity(request)
+    if not transition_allowed(identity["groups"], str(transition.get("label") or "")):
+        raise HTTPException(403, "Your assigned role cannot perform this review action.")
     comment = body.comment.strip()
     destination = transition.get("destination_state") or {}
     if "correction" in str(destination.get("label") or "").casefold() and not comment:
@@ -426,6 +443,9 @@ async def execute_transition(
             document_id=document_id,
             transition_label=str(transition.get("label") or "Review updated"),
             state_label=str(state["label"]), actor=actor, assignment=assignment,
+            steward_username=document_steward(
+                settings_for(request).database_path, document_id,
+            ),
         ):
             add_notification(
                 settings_for(request).database_path,

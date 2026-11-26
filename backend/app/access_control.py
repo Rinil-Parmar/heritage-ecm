@@ -1,5 +1,7 @@
 """Small, role-based ACL manager using Mayan's public REST API."""
 
+import asyncio
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -9,6 +11,8 @@ from app.administration import current_identity
 from app.auth import trusted_origin
 from app.documents import check_upstream
 from app.uploads import all_rows, call, require_write
+from app.auth import settings_for
+from app.database import add_access_audit, access_audit_rows
 
 router = APIRouter(prefix="/api/v1/access-control", tags=["Access control"])
 MANAGER_GROUPS = {"System Administrators", "Department Administrators"}
@@ -53,6 +57,7 @@ BUNDLES = {
                 "Edit a document's metadata", "Remove metadata from a document",
                 "Attach tags to documents", "Remove tags from documents",
                 "Create new comments", "Execute workflow tools",
+                "Transition workflow instances",
             },
         },
         "reviewer": {
@@ -88,12 +93,22 @@ BUNDLES = {
     },
 }
 BUNDLES["document"]["edit_and_review"] = {
-    "label": "Edit and review document",
+    "label": "Manager",
     "description": "Maintain the document and perform its available review decisions.",
     "permissions": (
         BUNDLES["document"]["contributor"]["permissions"]
         | BUNDLES["document"]["reviewer"]["permissions"]
     ),
+}
+
+DOCUMENT_PRESET_LABELS = {
+    "read_only": "Viewer",
+    "contributor": "Contributor",
+    "reviewer": "Reviewer",
+    "edit_and_review": "Manager",
+    "none": "Remove access",
+    "browse": "Viewer",
+    "organize": "Manager",
 }
 
 
@@ -152,6 +167,24 @@ async def acl_rows(request: Request, scope: str, object_id: int):
     return await object_acl_rows(request, app_label, model, object_id)
 
 
+async def role_members(request: Request, role_id: int):
+    state = getattr(request, "state", None)
+    cache = getattr(state, "access_role_members", {})
+    if role_id in cache:
+        return cache[role_id]
+    members = []
+    for group in await all_rows(request, f"/roles/{role_id}/groups/"):
+        if group.get("id") is None:
+            continue
+        for user in await all_rows(request, f"/groups/{int(group['id'])}/users/"):
+            if user.get("username"):
+                members.append(str(user["username"]))
+    cache[role_id] = sorted(set(members), key=str.casefold)
+    if state is not None:
+        state.access_role_members = cache
+    return cache[role_id]
+
+
 async def ensure_workflow_role_visibility(
     request: Request, role_id: int, *, allow_transition: bool = False
 ):
@@ -162,6 +195,11 @@ async def ensure_workflow_role_visibility(
     first check; this companion ACL handles the second without granting global
     document access.
     """
+    state = getattr(request, "state", None)
+    cache = getattr(state, "workflow_role_visibility", set())
+    cache_key = (role_id, allow_transition)
+    if cache_key in cache:
+        return
     templates = await all_rows(request, "/workflow_templates/")
     template = next(
         (
@@ -224,6 +262,9 @@ async def ensure_workflow_role_visibility(
     verified_permissions = {item["pk"] for item in (updated or {}).get("permissions", [])}
     if updated is None or not required_permissions.issubset(verified_permissions):
         raise HTTPException(502, "Mayan did not confirm the required workflow access for this role.")
+    cache.add(cache_key)
+    if state is not None:
+        state.workflow_role_visibility = cache
 
 
 async def ensure_reviewer_access(request: Request, document_id: int, role_id: int):
@@ -285,9 +326,11 @@ async def access_options(request: Request, scope: Literal["document", "cabinet"]
     bundles = []
     for key, bundle in BUNDLES[scope].items():
         bundles.append({
-            "key": key, "label": bundle["label"],
+            "key": key,
+            "label": DOCUMENT_PRESET_LABELS.get(key, bundle["label"]),
             "description": bundle["description"],
             "permission_pks": sorted(available[label] for label in bundle["permissions"] if label in available),
+            "permission_labels": sorted(bundle["permissions"] & set(available)),
             "missing_labels": sorted(bundle["permissions"] - set(available)),
         })
     role_values = []
@@ -351,6 +394,117 @@ async def read_acls(request: Request, scope: Literal["document", "cabinet"], obj
         raise
 
 
+@router.get("/audit", dependencies=[Depends(access_manager)])
+async def read_access_audit(
+    request: Request, scope: Literal["document", "cabinet"],
+    object_id: int = Query(ge=1),
+):
+    return {
+        "results": access_audit_rows(
+            settings_for(request).database_path, scope, object_id,
+        )
+    }
+
+
+@router.get("/cabinet-documents", dependencies=[Depends(access_manager)])
+async def cabinet_documents(request: Request, cabinet_id: int = Query(ge=1)):
+    rows = await all_rows(request, f"/cabinets/{cabinet_id}/documents/")
+    if len(rows) > 500:
+        raise HTTPException(422, "This cabinet contains more than 500 current documents. Narrow the cabinet before sharing in bulk.")
+    return {
+        "count": len(rows),
+        "results": [
+            {"id": int(row["id"]), "label": str(row.get("label") or f"Document {row['id']}")}
+            for row in rows if row.get("id") is not None
+        ],
+    }
+
+
+def bundle_for_permissions(scope: str, permissions: list[dict]):
+    labels = {str(item.get("label")) for item in permissions}
+    matches = [
+        (key, bundle) for key, bundle in BUNDLES[scope].items()
+        if key != "none" and bundle["permissions"] and bundle["permissions"].issubset(labels)
+    ]
+    matches.sort(key=lambda item: len(item[1]["permissions"]), reverse=True)
+    if not matches:
+        return {"key": "custom", "label": "Custom access" if labels else "No access"}
+    key, bundle = matches[0]
+    return {"key": key, "label": DOCUMENT_PRESET_LABELS.get(key, bundle["label"])}
+
+
+@router.get("/directory", dependencies=[Depends(access_manager)])
+async def access_directory(
+    request: Request, page: int = Query(default=1, ge=1, le=10000),
+    query: str = Query(default="", max_length=120),
+    username: str = Query(default="", max_length=150),
+    role_id: int | None = Query(default=None, ge=1),
+):
+    """Return authoritative document ACLs for one document page on demand."""
+    options = await access_options(request, "document")
+    roles = {row["id"]: row for row in options["roles"]}
+    path = "/search/documents.documentsearchresult/" if query.strip() else "/documents/"
+    search_params = {"page": page}
+    if query.strip():
+        search_params.update({"q": query.strip(), "_match_all": "yes"})
+    documents = []
+    body = {}
+    pages_to_read = range(1, 51) if username.strip() else [page]
+    for current_page in pages_to_read:
+        search_params["page"] = current_page
+        response = await call(request, "GET", path, params=search_params)
+        check_upstream(request, response.status_code)
+        try:
+            body = response.json()
+            batch = body["results"]
+            if not isinstance(batch, list):
+                raise ValueError
+            documents.extend(batch)
+        except (ValueError, KeyError, TypeError):
+            raise HTTPException(502, "The document service returned an unexpected response.") from None
+        if not username.strip() or not body.get("next"):
+            break
+    if username.strip() and body.get("next"):
+        raise HTTPException(422, "This archive is too large for a complete user report. Add a document filter and try again.")
+
+    limiter = asyncio.Semaphore(5)
+
+    async def inspect(document: dict):
+        async with limiter:
+            try:
+                document_id = int(document["id"])
+                rows = await acl_rows(request, "document", document_id)
+            except (KeyError, TypeError, ValueError):
+                return []
+        result = []
+        for row in rows:
+            audience = roles.get(row["role"]["id"])
+            if audience is None:
+                continue
+            if role_id and audience["id"] != role_id:
+                continue
+            if username and not any(username.casefold() in member.casefold() for member in audience["members"]):
+                continue
+            result.append({
+                "document_id": document_id,
+                "document_label": str(document.get("label") or f"Document {document_id}"),
+                "role_id": audience["id"], "role_label": audience["label"],
+                "members": audience["members"],
+                "access": bundle_for_permissions("document", row["permissions"]),
+                "permissions": row["permissions"],
+            })
+        return result
+
+    inspected = await asyncio.gather(*(inspect(document) for document in documents))
+    return {
+        "count": int(body.get("count") or len(documents)), "page": page,
+        "complete": bool(username.strip()),
+        "next_page": None if username.strip() else page + 1 if body.get("next") else None,
+        "previous_page": None if username.strip() else page - 1 if body.get("previous") and page > 1 else None,
+        "results": [entry for group in inspected for entry in group],
+    }
+
+
 class ACLUpdate(BaseModel):
     scope: Literal["document", "cabinet"]
     object_id: PositiveInt
@@ -359,8 +513,17 @@ class ACLUpdate(BaseModel):
     original_permission_pks: list[str] = Field(default_factory=list, max_length=200)
 
 
-@router.put("/acls", dependencies=[Depends(trusted_origin), Depends(require_write), Depends(access_manager)])
-async def update_acl(request: Request, body: ACLUpdate):
+class ACLBulkUpdate(BaseModel):
+    object_ids: list[PositiveInt] = Field(min_length=1, max_length=50)
+    role_id: PositiveInt
+    bundle: str = Field(min_length=1, max_length=50)
+
+
+@router.put("/acls", dependencies=[Depends(trusted_origin), Depends(require_write)])
+async def update_acl(
+    request: Request, body: ACLUpdate,
+    identity: dict = Depends(access_manager),
+):
     bundle = BUNDLES[body.scope].get(body.bundle)
     if bundle is None:
         raise HTTPException(422, "Choose a supported permission bundle.")
@@ -419,4 +582,55 @@ async def update_acl(request: Request, body: ACLUpdate):
     updated_permissions = {item["pk"] for item in (updated or {}).get("permissions", [])}
     if updated is None or not target.issubset(updated_permissions) or ((current & managed) - target) & updated_permissions:
         raise HTTPException(502, "Mayan did not confirm the requested access. Reload and review the ACL.")
+    role_label = next(
+        (str(row.get("label")) for row in roles if int(row.get("id", 0)) == body.role_id),
+        f"Role {body.role_id}",
+    )
+    audit = add_access_audit(
+        settings_for(request).database_path,
+        actor=str(identity.get("username") or "administrator"),
+        scope=body.scope, object_id=body.object_id, role_id=body.role_id,
+        role_label=role_label, bundle=body.bundle,
+        permission_count=len(updated_permissions),
+    )
+    updated["audit"] = audit
+    updated["verification"] = {
+        "users": await role_members(request, body.role_id),
+        "permissions_applied": sorted(item["label"] for item in updated["permissions"] if item["pk"] in target),
+        "missing_permissions": sorted(bundle["permissions"] - set(by_label)),
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+    }
     return updated
+
+
+@router.put("/bulk", dependencies=[Depends(trusted_origin), Depends(require_write)])
+async def bulk_update_acl(
+    request: Request, body: ACLBulkUpdate,
+    identity: dict = Depends(access_manager),
+):
+    object_ids = list(dict.fromkeys(body.object_ids))
+    results = []
+    failures = []
+    for object_id in object_ids:
+        try:
+            rows = await acl_rows(request, "document", object_id)
+            current = next((row for row in rows if row["role"]["id"] == body.role_id), None)
+            updated = await update_acl(
+                request,
+                ACLUpdate(
+                    scope="document", object_id=object_id, role_id=body.role_id,
+                    bundle=body.bundle,
+                    original_permission_pks=[item["pk"] for item in (current or {}).get("permissions", [])],
+                ),
+                identity,
+            )
+            results.append({"object_id": object_id, "acl": updated})
+        except HTTPException as exc:
+            failures.append({"object_id": object_id, "status": exc.status_code, "message": str(exc.detail)})
+    if failures and not results:
+        raise HTTPException(422, {"message": "No document access changes were applied.", "failures": failures})
+    return {
+        "requested": len(object_ids), "applied": len(results), "failed": len(failures),
+        "results": results, "failures": failures,
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+    }

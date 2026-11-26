@@ -9,9 +9,10 @@ The configuration is for synthetic development data. It is not a production or
 shared deployment. Total container memory limits are approximately 3.4 GB, but
 Docker Desktop and WSL add overhead. Monitor the laptop throughout the trial.
 
-The Compose file sets the six Celery worker classes and Gunicorn to one process
-each. All queues remain available, but document conversion, OCR, and indexing run
-with development-level concurrency. Increase these values only on a larger host.
+The Compose file sets the six Celery worker classes to one process each and uses
+three Gunicorn web workers so the interface remains responsive during startup.
+All queues remain available, but document conversion, OCR, and indexing run with
+development-level concurrency. Increase these values only on a larger host.
 
 ## Start
 

@@ -46,7 +46,7 @@ export function SignInPage() {
   }
 
   return (
-    <main className="grid min-h-screen bg-stone-50 lg:grid-cols-2">
+    <main className="theme-surface grid min-h-screen bg-stone-50 lg:grid-cols-2">
       <section className="hero-grid relative flex flex-col justify-between overflow-hidden bg-[#233b33] px-8 py-10 text-white sm:px-14 lg:p-16">
         <Link to="/" className="flex w-fit items-center gap-3 text-xl font-semibold"><Archive aria-hidden size={25} />ArcheoVault</Link>
         <div className="relative z-10 max-w-lg py-12 lg:py-24">
