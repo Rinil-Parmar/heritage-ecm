@@ -75,6 +75,10 @@ See the [deployment pipeline guide](docs/deployment-pipeline.md) for the
 approval-gated workflow that validates or redeploys Mayan on the university VM.
 Use the [demo and manual testing guide](docs/demo-and-manual-testing.md) to prepare
 synthetic organization data and verify the complete administrator and user flows.
+Use the [backup and recovery guide](docs/backup-and-recovery.md) to protect and
+restore both Mayan records and ArcheoVault application state.
+Use the [core-flow release checklist](docs/core-flow-release-checklist.md) as the
+manual production gate for administrator, assistant, professor and viewer flows.
 
 ## Milestones
 

@@ -18,6 +18,26 @@ from app.uploads import cabinet_rows, call, require_write
 router = APIRouter(prefix="/api/v1/smart-search", tags=["Smart search"])
 MAX_CATALOG_ITEMS = 150
 
+# Used only by the deterministic parser. Explicit wording such as
+# ``country Canada`` is always accepted, while natural wording such as
+# ``from Canada`` is promoted to a Country filter only when the value is a
+# recognized country. This prevents phrases like ``from trench seven`` from
+# becoming the invalid filter ``Country = trench seven``.
+COUNTRY_NAMES = frozenset(
+    name.strip().casefold() for name in """
+Afghanistan|Albania|Algeria|Andorra|Angola|Antigua and Barbuda|Argentina|Armenia|Australia|Austria|Azerbaijan|
+Bahamas|Bahrain|Bangladesh|Barbados|Belarus|Belgium|Belize|Benin|Bhutan|Bolivia|Bosnia and Herzegovina|Botswana|Brazil|Brunei|Bulgaria|Burkina Faso|Burundi|
+Cabo Verde|Cambodia|Cameroon|Canada|Central African Republic|Chad|Chile|China|Colombia|Comoros|Congo|Costa Rica|Croatia|Cuba|Cyprus|Czechia|Czech Republic|
+Democratic Republic of the Congo|Denmark|Djibouti|Dominica|Dominican Republic|Ecuador|Egypt|El Salvador|Equatorial Guinea|Eritrea|Estonia|Eswatini|Ethiopia|
+Fiji|Finland|France|Gabon|Gambia|Georgia|Germany|Ghana|Greece|Grenada|Guatemala|Guinea|Guinea-Bissau|Guyana|Haiti|Honduras|Hungary|Iceland|India|Indonesia|Iran|Iraq|Ireland|Israel|Italy|Ivory Coast|
+Jamaica|Japan|Jordan|Kazakhstan|Kenya|Kiribati|Kuwait|Kyrgyzstan|Laos|Latvia|Lebanon|Lesotho|Liberia|Libya|Liechtenstein|Lithuania|Luxembourg|
+Madagascar|Malawi|Malaysia|Maldives|Mali|Malta|Marshall Islands|Mauritania|Mauritius|Mexico|Micronesia|Moldova|Monaco|Mongolia|Montenegro|Morocco|Mozambique|Myanmar|
+Namibia|Nauru|Nepal|Netherlands|New Zealand|Nicaragua|Niger|Nigeria|North Korea|North Macedonia|Norway|Oman|Pakistan|Palau|Palestine|Panama|Papua New Guinea|Paraguay|Peru|Philippines|Poland|Portugal|Qatar|
+Romania|Russia|Rwanda|Saint Kitts and Nevis|Saint Lucia|Saint Vincent and the Grenadines|Samoa|San Marino|Sao Tome and Principe|Saudi Arabia|Senegal|Serbia|Seychelles|Sierra Leone|Singapore|Slovakia|Slovenia|Solomon Islands|Somalia|South Africa|South Korea|South Sudan|Spain|Sri Lanka|Sudan|Suriname|Sweden|Switzerland|Syria|
+Taiwan|Tajikistan|Tanzania|Thailand|Timor-Leste|Togo|Tonga|Trinidad and Tobago|Tunisia|Turkey|Turkiye|Turkmenistan|Tuvalu|Uganda|Ukraine|United Arab Emirates|United Kingdom|United States|United States of America|USA|US|UK|Uruguay|Uzbekistan|Vanuatu|Vatican City|Venezuela|Vietnam|Yemen|Zambia|Zimbabwe
+""".replace("\n", "").split("|") if name.strip()
+)
+
 
 class MetadataCriterion(BaseModel):
     field: str = Field(min_length=1, max_length=100)
@@ -26,6 +46,7 @@ class MetadataCriterion(BaseModel):
 
 class SearchPlan(BaseModel):
     keywords: str = Field(default="", max_length=200)
+    content_mode: Literal["all_terms", "exact_phrase"] = "all_terms"
     created_from: date | None = None
     created_to: date | None = None
     document_type_id: int | None = Field(default=None, ge=1)
@@ -43,6 +64,7 @@ class SearchPlan(BaseModel):
 
 class SmartSearchRequest(BaseModel):
     query: str = Field(min_length=2, max_length=500)
+    content_mode: Literal["all_terms", "exact_phrase"] = "all_terms"
 
 
 class SearchResult(BaseModel):
@@ -89,8 +111,9 @@ async def smart_search_status(request: Request):
     return {
         "ai_enabled": provider_ready(settings),
         "mode": "ai" if provider_ready(settings) else "standard",
-        "capabilities": ["keywords", "created dates", "document types", "tags", "cabinets", "metadata"],
+        "capabilities": ["full-text content", "exact phrases", "created dates", "document types", "tags", "cabinets", "metadata"],
         "examples": [
+            "Find documents that mention blue stone",
             "Find excavation reports from Canada created between 2023 and 2025",
             "Show records tagged Needs Review from 2026",
             "Find documents for Site A in the Archaeology cabinet",
@@ -195,7 +218,7 @@ def metadata_criteria(query: str, catalog: dict[str, list[dict]]) -> tuple[list[
         (("historical period", "period"), r"\b(?:historical\s+)?period\s*(?:is|:)?\s*([A-Za-z0-9][A-Za-z0-9 .'-]{1,60})"),
         (("excavation season", "season"), r"\bseason\s*(?:is|:)?\s*((?:19|20)\d{2}|[A-Za-z][A-Za-z0-9 .'-]{1,40})"),
     ]
-    stop = r"(?=\s+(?:created|dated|between|from|to|in|tagged|with|during|for|and\s+type)\b|[,.;]|$)"
+    stop = r"(?=\s+(?:created|dated|between|from|to|in|tagged|with|during|for|about|and\s+type)\b|[,.;]|$)"
     criteria: list[MetadataCriterion] = []
     spans: list[tuple[int, int]] = []
     used_fields: set[str] = set()
@@ -218,12 +241,17 @@ def metadata_criteria(query: str, catalog: dict[str, list[dict]]) -> tuple[list[
     if country and str(country["name"]) not in used_fields:
         match = re.search(r"\bfrom\s+([A-Za-z][A-Za-z .'-]{1,50}?)" + stop, query, flags=re.I)
         if match:
-            criteria.append(MetadataCriterion(field=str(country["name"]), value=match.group(1).strip(" .,-")))
-            spans.append(match.span())
+            value = match.group(1).strip(" .,-")
+            if value.casefold() in COUNTRY_NAMES:
+                criteria.append(MetadataCriterion(field=str(country["name"]), value=value))
+                spans.append(match.span())
     return criteria[:5], spans
 
 
-def standard_plan(query: str, catalog: dict[str, list[dict]]) -> SearchPlan:
+def standard_plan(
+    query: str, catalog: dict[str, list[dict]],
+    content_mode: Literal["all_terms", "exact_phrase"] = "all_terms",
+) -> SearchPlan:
     """Useful, deterministic fallback before or during provider configuration."""
     years = [int(value) for value in re.findall(r"\b(?:19|20)\d{2}\b", query)]
     current_year = date.today().year
@@ -250,10 +278,16 @@ def standard_plan(query: str, catalog: dict[str, list[dict]]) -> SearchPlan:
             for token in re.findall(r"[A-Za-z0-9]+", label):
                 if len(token) > 3:
                     keywords = re.sub(rf"\b{re.escape(token.rstrip('s'))}(?:s|es)?\b", " ", keywords, flags=re.I)
-    keywords = re.sub(r"\b(?:from|to|between|and|in|created|dated|show|find|search|give|list|records?|documents?|tagged|tag|cabinet|folder|type|all|me|the|with)\b", " ", keywords, flags=re.I)
+    keywords = re.sub(
+        r"\b(?:from|to|between|and|in|created|dated|show|find|search|give|list|records?|documents?|"
+        r"tagged|tag|cabinet|folder|type|all|me|the|with|that|which|mention(?:s|ed|ing)?|"
+        r"contain(?:s|ed|ing)?|discuss(?:es|ed|ing)?|about|content)\b",
+        " ", keywords, flags=re.I,
+    )
     keywords = re.sub(r"\s+", " ", keywords).strip()
     return SearchPlan(
-        keywords=keywords[:200], created_from=start, created_to=end,
+        keywords=keywords[:200], content_mode=content_mode,
+        created_from=start, created_to=end,
         document_type_id=int(document_type["id"]) if document_type else None,
         tag_id=int(tag["id"]) if tag else None,
         cabinet_id=int(cabinet["id"]) if cabinet else None,
@@ -266,6 +300,7 @@ PLAN_SCHEMA = {
     "type": "object", "additionalProperties": False,
     "properties": {
         "keywords": {"type": "string"},
+        "content_mode": {"type": "string", "enum": ["all_terms", "exact_phrase"]},
         "created_from": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "created_to": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "document_type_id": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
@@ -278,7 +313,7 @@ PLAN_SCHEMA = {
         }},
         "explanation": {"type": "string"},
     },
-    "required": ["keywords", "created_from", "created_to", "document_type_id", "tag_id", "cabinet_id", "metadata", "explanation"],
+    "required": ["keywords", "content_mode", "created_from", "created_to", "document_type_id", "tag_id", "cabinet_id", "metadata", "explanation"],
 }
 
 
@@ -292,16 +327,20 @@ def response_text(payload: dict) -> str:
     raise ValueError("No structured output")
 
 
-async def ai_plan(settings, query: str, catalog: dict[str, list[dict]]) -> SearchPlan:
+async def ai_plan(
+    settings, query: str, catalog: dict[str, list[dict]],
+    content_mode: Literal["all_terms", "exact_phrase"],
+) -> SearchPlan:
     safe_catalog = json.dumps(catalog, ensure_ascii=True, separators=(",", ":"))
     payload = {
         "model": settings.ai_model, "store": False, "max_output_tokens": 700,
         "instructions": (
             "Convert an archive search request into filters. Use only IDs and metadata field names in the supplied catalog. "
-            "Never invent an ID or field. Put unmatched subject terms in keywords. Dates refer to record creation unless the "
-            "request clearly names a catalogued metadata field. Return empty keywords when filters fully express the request."
+            "Never invent an ID or field. Put unmatched subject terms in keywords. Copy the requested content_mode exactly. "
+            "Dates refer to record creation unless the request clearly names a catalogued metadata field. Return empty keywords "
+            "when filters fully express the request."
         ),
-        "input": f"Catalog: {safe_catalog}\nUser request: {query}",
+        "input": f"Catalog: {safe_catalog}\nRequested content mode: {content_mode}\nUser request: {query}",
         "text": {"format": {"type": "json_schema", "name": "archive_search_plan", "strict": True, "schema": PLAN_SCHEMA}},
     }
     headers = {"Authorization": f"Bearer {settings.ai_api_key.get_secret_value()}", "Content-Type": "application/json"}
@@ -330,7 +369,12 @@ def validate_catalog_plan(plan: SearchPlan, catalog: dict[str, list[dict]]) -> S
 def search_params(plan: SearchPlan, page: int = 1) -> dict[str, str | int]:
     params: dict[str, str | int] = {"page": page, "_match_all": "yes"}
     if plan.keywords:
-        params["q"] = plan.keywords
+        # Mayan owns parsing, OCR and indexing. Quoting requests phrase matching
+        # from its configured search backend; the default sends normalized terms.
+        params["q"] = (
+            f'"{plan.keywords.replace(chr(34), " ").strip()}"'
+            if plan.content_mode == "exact_phrase" else plan.keywords
+        )
     if plan.document_type_id:
         params["document_type__id"] = f"={plan.document_type_id}"
     if plan.tag_id:
@@ -343,8 +387,12 @@ def search_params(plan: SearchPlan, page: int = 1) -> dict[str, str | int]:
         params["datetime_created"] = f">={datetime.combine(plan.created_from, time.min).isoformat()}"
     elif plan.created_to:
         params["datetime_created"] = f"<={datetime.combine(plan.created_to, time.max).isoformat()}"
-    scopes: list[str] = []
-    for index, item in enumerate(plan.metadata):
+    # Mayan assigns unscoped ``q`` terms to scope 0. Metadata scopes must start
+    # at 1 when q is present, otherwise both expressions collide at scope 0
+    # and Mayan rejects the request with HTTP 400.
+    scopes: list[str] = ["0"] if plan.keywords else []
+    metadata_start = 1 if plan.keywords else 0
+    for index, item in enumerate(plan.metadata, start=metadata_start):
         params[f"__{index}_metadata__metadata_type__name"] = f"={item.field}"
         params[f"__{index}_metadata__value"] = item.value
         scopes.append(str(index))
@@ -353,7 +401,7 @@ def search_params(plan: SearchPlan, page: int = 1) -> dict[str, str | int]:
         combined = f"{left}{right}"
         params[f"__operator_{left}_{right}"] = f"AND_{combined}"
         scopes.insert(0, combined)
-    if scopes:
+    if plan.metadata and scopes:
         params["__result"] = scopes[0]
     return params
 
@@ -361,7 +409,8 @@ def search_params(plan: SearchPlan, page: int = 1) -> dict[str, str | int]:
 def interpretation(plan: SearchPlan, catalog: dict[str, list[dict]]) -> list[str]:
     values: list[str] = []
     if plan.keywords:
-        values.append(f'Keywords: “{plan.keywords}”')
+        prefix = "Exact content phrase" if plan.content_mode == "exact_phrase" else "Document content"
+        values.append(f'{prefix}: “{plan.keywords}”')
     for field, collection, prefix in (("document_type_id", "document_types", "Type"), ("tag_id", "tags", "Tag"), ("cabinet_id", "cabinets", "Cabinet")):
         selected = getattr(plan, field)
         row = next((item for item in catalog[collection] if item["id"] == selected), None)
@@ -410,15 +459,17 @@ async def smart_search(request: Request, body: SmartSearchRequest):
         if not store_for(request).allow_ai_search(session.username, settings.ai_searches_per_minute, settings.ai_searches_per_day):
             raise HTTPException(429, "Smart search limit reached. Refine your existing results or try again later.")
         try:
-            plan = await ai_plan(settings, body.query.strip(), catalog)
+            plan = await ai_plan(settings, body.query.strip(), catalog, body.content_mode)
             mode = "ai"
         except (httpx.HTTPError, RuntimeError):
-            plan = standard_plan(body.query.strip(), catalog)
+            plan = standard_plan(body.query.strip(), catalog, body.content_mode)
             warning = "AI interpretation is temporarily unavailable; a standard archive search was used."
     else:
-        plan = standard_plan(body.query.strip(), catalog)
+        plan = standard_plan(body.query.strip(), catalog, body.content_mode)
         warning = "AI setup is pending; recognizable filters and keywords were applied."
     plan = validate_catalog_plan(plan, catalog)
+    # Search mode is a user control, never a provider decision.
+    plan = plan.model_copy(update={"content_mode": body.content_mode})
     page = await execute_search(request, plan, 1)
     return SmartSearchResponse(
         mode=mode, warning=warning, plan=plan, interpretation=interpretation(plan, catalog),

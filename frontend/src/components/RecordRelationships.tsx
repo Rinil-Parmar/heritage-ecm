@@ -100,7 +100,7 @@ export function RecordRelationships({ id, csrf }: { id: number; csrf: string }) 
     setSearching(true)
     setError('')
     try {
-      const page = await runSmartSearch(term, csrf)
+      const page = await runSmartSearch(term, 'all_terms', csrf)
       setResults(available(page.results))
       setResultMode('search')
       setHasSearched(true)

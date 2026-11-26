@@ -103,6 +103,7 @@ export APP_ENV_FILE="$PWD/.env"
 export APP_RELEASE="$(cat current-release)"
 docker compose -p archeoecm-application -f "releases/$APP_RELEASE/compose.yaml" ps
 curl --fail https://archeoecm.cs.uwindsor.ca/api/v1/health
+curl --fail https://archeoecm.cs.uwindsor.ca/api/v1/health/ready
 docker compose -p archeoecm-application -f "releases/$APP_RELEASE/compose.yaml" logs --tail=80 api web
 ```
 

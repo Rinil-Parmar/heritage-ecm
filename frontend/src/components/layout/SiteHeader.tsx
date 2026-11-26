@@ -21,15 +21,16 @@ export function SiteHeader() {
           <a className="transition hover:text-white" href="#capabilities">Capabilities</a>
           <a className="transition hover:text-white" href="#record">Record model</a>
           <a className="transition hover:text-white" href="#value">Why ArcheoVault</a>
+          <a className="transition hover:text-white" href="#team">Team</a>
         </nav>
 
-        <Link
+        <div className="flex items-center gap-2"><Link
           className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300"
           to={SIGN_IN_URL}
         >
           Sign in
           <ArrowUpRight aria-hidden="true" size={16} />
-        </Link>
+        </Link></div>
       </div>
     </header>
   )

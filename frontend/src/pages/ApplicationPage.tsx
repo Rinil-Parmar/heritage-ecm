@@ -1,21 +1,26 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Archive, FileCheck2, Files, KeyRound, LayoutDashboard, LogOut, Sparkles, Users } from 'lucide-react'
 import { getSession, signOut, type Session } from '../api/auth'
 import { ApiError } from '../api/client'
 import { DocumentsPanel } from '../components/DocumentsPanel'
-import { DocumentDetailPanel } from '../components/DocumentDetailPanel'
-import { UploadPanel } from '../components/UploadPanel'
 import { CabinetNavigation } from '../components/CabinetNavigation'
-import { TagLibrary } from '../components/TagLibrary'
-import { UserAdministration } from '../components/UserAdministration'
 import { captureRequest } from '../api/uploads'
-import { ReviewQueue } from '../components/ReviewQueue'
-import { SmartSearch } from '../components/SmartSearch'
 import { OperationsDashboard } from '../components/OperationsDashboard'
 import { NotificationMenu } from '../components/NotificationMenu'
-import { AccessControlManager } from '../components/AccessControlManager'
 import { getAccessManagerStatus } from '../api/accessControl'
+
+const DocumentDetailPanel = lazy(() => import('../components/DocumentDetailPanel').then(module => ({ default: module.DocumentDetailPanel })))
+const UploadPanel = lazy(() => import('../components/UploadPanel').then(module => ({ default: module.UploadPanel })))
+const TagLibrary = lazy(() => import('../components/TagLibrary').then(module => ({ default: module.TagLibrary })))
+const UserAdministration = lazy(() => import('../components/UserAdministration').then(module => ({ default: module.UserAdministration })))
+const ReviewQueue = lazy(() => import('../components/ReviewQueue').then(module => ({ default: module.ReviewQueue })))
+const SmartSearch = lazy(() => import('../components/SmartSearch').then(module => ({ default: module.SmartSearch })))
+const AccessControlManager = lazy(() => import('../components/AccessControlManager').then(module => ({ default: module.AccessControlManager })))
+
+function WorkspaceLoading() {
+  return <div role="status" className="space-y-5"><div className="h-5 w-28 animate-pulse rounded bg-stone-200" /><div className="h-11 w-2/3 animate-pulse rounded bg-stone-200" /><div className="grid gap-4 md:grid-cols-3">{[1, 2, 3].map(value => <div key={value} className="h-36 animate-pulse rounded-2xl bg-white" />)}</div><span className="sr-only">Loading workspace…</span></div>
+}
 
 export function ApplicationPage() {
   const navigate = useNavigate()
@@ -36,6 +41,9 @@ export function ApplicationPage() {
   const [adminAllowed, setAdminAllowed] = useState(false)
   const [accessAllowed, setAccessAllowed] = useState(false)
   const [accessChecked, setAccessChecked] = useState(false)
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }, [location.pathname])
   useEffect(() => {
     if (!session) { setAdminAllowed(false); return }
     const controller = new AbortController()
@@ -68,6 +76,12 @@ export function ApplicationPage() {
     return () => { active = false }
   }, [navigate, attempt])
 
+  useEffect(() => {
+    const expired = () => navigate('/sign-in', { replace: true })
+    window.addEventListener('archeovault:unauthorized', expired)
+    return () => window.removeEventListener('archeovault:unauthorized', expired)
+  }, [navigate])
+
   async function logout() {
     if (!session || busy) return
     setBusy(true)
@@ -82,7 +96,7 @@ export function ApplicationPage() {
   }
 
   return (
-    <div style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties} className="min-h-screen bg-[#f6f7f4] lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]">
+    <div style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties} className="theme-surface min-h-screen bg-[#f6f7f4] lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]">
       <aside className="relative flex min-w-0 flex-col bg-[#233b33] px-6 py-6 text-white lg:sticky lg:top-0 lg:h-dvh lg:py-6">
         <div role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin={220} aria-valuemax={480} aria-valuenow={sidebarWidth} tabIndex={0}
           onDoubleClick={() => resizeSidebar(280)}
@@ -115,8 +129,8 @@ export function ApplicationPage() {
         </header>
       <main className="mx-auto max-w-7xl px-6 py-9 sm:px-10 sm:py-12">
         {error && <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}{!session && <button onClick={() => setAttempt(attempt + 1)} className="ml-4 underline">Try again</button>}</div>}
-        {!session && !error && <p role="status">Checking your session…</p>}
-        {session && (dashboardPage ? <OperationsDashboard username={session.username} adminAllowed={adminAllowed} /> : accessPage ? (!accessChecked ? <p role="status">Checking access-management permission…</p> : accessAllowed ? <AccessControlManager csrf={session.csrf_token} /> : <p>Access management is unavailable for this account.</p>) : smartSearchPage ? <SmartSearch csrf={session.csrf_token} /> : reviewsPage ? <ReviewQueue username={session.username} csrf={session.csrf_token} /> : tagsPage ? <TagLibrary /> : location.pathname === '/app/users' ? (adminAllowed ? <UserAdministration csrf={session.csrf_token} /> : <p>Account administration is unavailable for this account.</p>) : location.pathname === '/app/upload' ? <UploadPanel csrf={session.csrf_token} /> : documentId ? <DocumentDetailPanel key={documentId} id={Number(documentId)} csrf={session.csrf_token} /> : <DocumentsPanel />)}
+        {!session && !error && <WorkspaceLoading />}
+        {session && <Suspense fallback={<WorkspaceLoading />}>{dashboardPage ? <OperationsDashboard username={session.username} adminAllowed={adminAllowed} /> : accessPage ? (!accessChecked ? <WorkspaceLoading /> : accessAllowed ? <AccessControlManager csrf={session.csrf_token} /> : <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6"><h1 className="text-xl font-semibold">Access management unavailable</h1><p className="mt-2 text-sm text-amber-900">Your account is signed in but does not have permission to manage organizational access.</p></section>) : smartSearchPage ? <SmartSearch csrf={session.csrf_token} /> : reviewsPage ? <ReviewQueue username={session.username} csrf={session.csrf_token} /> : tagsPage ? <TagLibrary /> : location.pathname === '/app/users' ? (adminAllowed ? <UserAdministration csrf={session.csrf_token} /> : <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6"><h1 className="text-xl font-semibold">User administration unavailable</h1><p className="mt-2 text-sm text-amber-900">Only a system administrator can create or edit accounts.</p></section>) : location.pathname === '/app/upload' ? <UploadPanel csrf={session.csrf_token} /> : documentId ? <DocumentDetailPanel key={documentId} id={Number(documentId)} csrf={session.csrf_token} /> : <DocumentsPanel />}</Suspense>}
       </main>
       </div>
     </div>

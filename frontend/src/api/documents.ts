@@ -1,4 +1,4 @@
-import { ApiError } from './client'
+import { requestBlob, requestJson } from './client'
 
 export interface DocumentSummary {
   id: number
@@ -26,38 +26,32 @@ export interface DocumentFilters {
   createdTo?: string
 }
 
+export interface PreviewPage { id: number; page_number: number; image_hash: string }
+export interface PreviewPageList { version_id: number; count: number; results: PreviewPage[] }
+
 export interface DocumentDetail extends DocumentSummary {
   uuid: string
   file_latest: { id: number; filename: string; mimetype: string; size: number | null; timestamp: string | null } | null
 }
 
-async function recordResponse(url: string, signal?: AbortSignal): Promise<Response> {
-  const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal })
-  if (!response.ok) {
-    const messages: Record<number, string> = {
-      401: 'Your session has ended. Please sign in again.',
-      403: 'You do not have permission to access this record or download its file.',
-      404: 'This record or file is no longer available.',
-      413: 'This file is too large for preview. Download the original instead.',
-      415: 'Preview is unavailable for this format. Download the original instead.',
-      429: 'The document service is busy. Please try again shortly.',
-    }
-    throw new ApiError(messages[response.status] || 'The document service is unavailable. Please try again.', response.status)
-  }
-  return response
-}
-
 export async function getDocument(id: number, signal?: AbortSignal): Promise<DocumentDetail> {
-  const response = await recordResponse(`/api/v1/documents/${id}`, signal)
-  if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Unexpected document response.')
-  const data = await response.json()
+  const data = await requestJson<DocumentDetail>(`/api/v1/documents/${id}`, { signal })
   if (data.id !== id || typeof data.label !== 'string') throw new Error('Unexpected document response.')
-  return data as DocumentDetail
+  return data
 }
 
 export async function getDocumentFile(id: number, preview: boolean, signal?: AbortSignal): Promise<Blob> {
-  const response = await recordResponse(`/api/v1/documents/${id}/file?preview=${preview}`, signal)
-  return response.blob()
+  return requestBlob(`/api/v1/documents/${id}/file?preview=${preview}`, { signal }, { timeoutMs: 30_000 })
+}
+
+export function getPreviewPages(id: number, signal?: AbortSignal) {
+  return requestJson<PreviewPageList>(`/api/v1/documents/${id}/preview-pages`, { signal })
+}
+
+export function getPreviewPageImage(id: number, versionId: number, pageId: number, width: number, imageHash: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({ width: String(width) })
+  if (imageHash) params.set('_hash', imageHash)
+  return requestBlob(`/api/v1/documents/${id}/preview-pages/${versionId}/${pageId}?${params}`, { signal }, { timeoutMs: 45_000 })
 }
 
 export async function listDocuments(page: number, filters: DocumentFilters = {}, signal?: AbortSignal): Promise<DocumentPage> {
@@ -68,24 +62,7 @@ export async function listDocuments(page: number, filters: DocumentFilters = {},
   if (filters.documentTypeId) params.set('document_type_id', String(filters.documentTypeId))
   if (filters.createdFrom) params.set('created_from', filters.createdFrom)
   if (filters.createdTo) params.set('created_to', filters.createdTo)
-  const response = await fetch(`/api/v1/documents?${params}`, {
-    credentials: 'same-origin', cache: 'no-store', signal,
-    headers: { Accept: 'application/json' },
-  })
-  if (!response.ok) {
-    const messages: Record<number, string> = {
-      401: 'Your session has ended. Please sign in again.',
-      403: 'Your account does not have access to the document list.',
-      404: 'This page is no longer available. Return to the first page or try refreshing.',
-      422: 'The selected search filters are invalid. Check the dates and try again.',
-      429: 'The document service is busy. Please try again shortly.',
-    }
-    throw new ApiError(messages[response.status] || 'Unable to load documents. Please try again.', response.status)
-  }
-  if (!response.headers.get('content-type')?.includes('application/json')) {
-    throw new Error('The document service returned an unexpected response.')
-  }
-  const data = await response.json()
+  const data = await requestJson<DocumentPage>(`/api/v1/documents?${params}`, { signal })
   if (!Array.isArray(data.results) || typeof data.count !== 'number' || data.page !== page) {
     throw new Error('The document service returned an unexpected response.')
   }

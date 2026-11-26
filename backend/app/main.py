@@ -1,7 +1,12 @@
 from contextlib import asynccontextmanager
+import json
+import logging
+import sqlite3
+import time
+from uuid import uuid4
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -20,6 +25,7 @@ from app.smart_search import router as smart_search_router
 from app.notifications import router as notifications_router
 from app.access_control import router as access_control_router
 from app.relationships import router as relationships_router
+from app.database import connection
 
 
 class HealthResponse(BaseModel):
@@ -27,7 +33,14 @@ class HealthResponse(BaseModel):
     service: str
 
 
+class ReadinessResponse(BaseModel):
+    status: str
+    service: str
+    components: dict[str, str]
+
+
 settings = Settings()
+logger = logging.getLogger("archeovault.api")
 
 
 @asynccontextmanager
@@ -68,13 +81,72 @@ async def validation_error(request, exc):
 
 @app.middleware("http")
 async def private_responses(request, call_next):
-    response = await call_next(request)
+    request_id = request.headers.get("x-request-id", "").strip()
+    if not request_id or len(request_id) > 100 or not request_id.isascii():
+        request_id = uuid4().hex
+    request.state.request_id = request_id
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception(json.dumps({
+            "event": "request_failed", "request_id": request_id,
+            "method": request.method, "path": request.url.path,
+        }))
+        raise
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Request-ID"] = request_id
+    response.headers["Server-Timing"] = (
+        f'app;dur={(time.perf_counter() - started) * 1000:.2f}'
+    )
+    logger.info(json.dumps({
+        "event": "request_complete", "request_id": request_id,
+        "method": request.method, "path": request.url.path,
+        "status": response.status_code,
+        "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+    }))
     return response
 
 
 @app.get("/api/v1/health", response_model=HealthResponse, tags=["Operations"])
-def health() -> HealthResponse:
+async def health() -> HealthResponse:
     """Process liveness only; does not assert upstream or login availability."""
-    return HealthResponse(status="ok", service="archeoecm-backend")
+    return HealthResponse(status="ok", service="archeovault-backend")
+
+
+@app.get("/api/v1/health/ready", response_model=ReadinessResponse, tags=["Operations"])
+async def readiness(request: Request):
+    """Deployment readiness: application database and Mayan API are reachable."""
+    components: dict[str, str] = {}
+    try:
+        db = connection(settings.database_path)
+        try:
+            db.execute("SELECT 1").fetchone()
+        finally:
+            db.close()
+        components["database"] = "ok"
+    except (OSError, sqlite3.Error):
+        components["database"] = "unavailable"
+
+    try:
+        response = await request.app.state.upstream_http.get(
+            str(settings.mayan_api_url), headers={"Accept": "application/json"},
+            timeout=settings.request_timeout,
+        )
+        content_type = response.headers.get("content-type", "")
+        components["mayan"] = (
+            "ok" if response.status_code == 200 and "application/json" in content_type
+            else "unavailable"
+        )
+    except httpx.HTTPError:
+        components["mayan"] = "unavailable"
+
+    ready = all(value == "ok" for value in components.values())
+    body = ReadinessResponse(
+        status="ready" if ready else "not_ready",
+        service="archeovault-backend", components=components,
+    )
+    if not ready:
+        return JSONResponse(status_code=503, content=body.model_dump())
+    return body

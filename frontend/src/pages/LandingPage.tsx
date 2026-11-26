@@ -14,6 +14,8 @@ import {
   ShieldCheck,
   Tags,
   Workflow,
+  GraduationCap,
+  UsersRound,
 } from 'lucide-react'
 import { RecordContextSection } from '../components/RecordContextSection'
 import { ResearchFitSection } from '../components/ResearchFitSection'
@@ -63,9 +65,30 @@ const workflow = [
   { number: '04', title: 'Trace', body: 'Retain document versions and a clear history as records evolve.' },
 ]
 
+const projectTeam = [
+  {
+    initials: 'RP',
+    name: 'Rinil Parmar',
+    role: 'Project team',
+    body: 'Contributed to ArcheoVault’s application architecture, platform integration, deployment workflow, and end-to-end product validation.',
+  },
+  {
+    initials: 'AP',
+    name: 'Aditi Parmar',
+    role: 'Project team',
+    body: 'Collaborated on the research platform’s development, workflow evaluation, testing, and refinement of the user experience.',
+  },
+  {
+    initials: 'JS',
+    name: 'Janitha Salla',
+    role: 'Project team',
+    body: 'Supported the project through collaborative development, feature validation, documentation, and quality review.',
+  },
+]
+
 export function LandingPage() {
   return (
-    <div id="top" className="min-h-screen bg-stone-50 text-stone-950">
+    <div id="top" className="theme-surface min-h-screen bg-stone-50 text-stone-950">
       <a className="sr-only z-50 rounded bg-white px-4 py-2 focus:not-sr-only focus:fixed focus:top-3 focus:left-3" href="#main-content">
         Skip to content
       </a>
@@ -179,6 +202,33 @@ export function LandingPage() {
         <OrganizationValueSection />
 
         <ResearchFitSection />
+
+        <section id="team" className="scroll-mt-8 border-y border-stone-200 bg-white py-20 sm:py-28">
+          <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+            <div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
+              <SectionHeading eyebrow="Academic guidance & project team" title="Built through research, engineering, and collaboration" body="ArcheoVault is a University of Windsor project shaped by academic guidance and a shared commitment to making heritage records easier to preserve, govern, and explore." />
+              <article className="rounded-3xl border border-[#b48b35]/35 bg-[#18342b] p-7 text-white shadow-sm sm:p-9">
+                <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+                  <span className="grid size-16 shrink-0 place-items-center rounded-2xl bg-amber-300 text-lg font-bold text-stone-950">AM</span>
+                  <div>
+                    <div className="flex items-center gap-2 text-amber-200"><GraduationCap aria-hidden size={18} /><p className="text-xs font-semibold tracking-[0.16em] uppercase">Faculty advisor</p></div>
+                    <h3 className="mt-3 text-2xl font-semibold">Dr. Andreas Maniatis</h3>
+                    <p className="mt-1 text-sm text-stone-300">University of Windsor</p>
+                    <p className="mt-5 max-w-2xl text-sm leading-7 text-stone-200">Professor at the University of Windsor with a research focus on Big Data Analytics, Machine Learning, and AI. He holds a PhD from the National Technical University of Athens and guided the team’s academic direction with expertise in data engineering and analytics.</p>
+                  </div>
+                </div>
+              </article>
+            </div>
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
+              {projectTeam.map(member => <article key={member.name} className="rounded-2xl border border-stone-200 bg-stone-50 p-6">
+                <div className="flex items-center gap-4"><span className="grid size-12 shrink-0 place-items-center rounded-xl bg-amber-100 font-bold text-amber-900">{member.initials}</span><div><h3 className="font-semibold">{member.name}</h3><p className="mt-1 text-xs font-semibold tracking-[0.12em] text-[#8a682d] uppercase">{member.role}</p></div></div>
+                <p className="mt-5 text-sm leading-6 text-stone-600">{member.body}</p>
+              </article>)}
+            </div>
+            <div className="mt-8 flex items-center gap-3 rounded-2xl border border-stone-200 bg-[#faf8f1] px-5 py-4 text-sm text-stone-600"><UsersRound aria-hidden size={19} className="shrink-0 text-[#365d4d]" /><p>A collaborative University of Windsor project connecting academic direction with practical heritage information management.</p></div>
+          </div>
+        </section>
+
         <ProductQuestions />
       </main>
 
