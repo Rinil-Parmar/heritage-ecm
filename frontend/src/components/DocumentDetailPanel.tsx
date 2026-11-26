@@ -24,7 +24,45 @@ function size(bytes: number | null) {
   return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function NativeFilePreview({ document }: { document: DocumentDetail }) {
+  const navigate = useNavigate()
+  const [url, setUrl] = useState('')
+  const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  const fileId = document.file_latest?.id
+  useEffect(() => {
+    const controller = new AbortController()
+    let objectUrl = ''
+    setUrl(''); setError('')
+    getDocumentFile(document.id, true, controller.signal).then(blob => {
+      if (controller.signal.aborted) return
+      objectUrl = URL.createObjectURL(blob)
+      setUrl(objectUrl)
+    }).catch(cause => {
+      if (controller.signal.aborted) return
+      if (cause instanceof ApiError && cause.status === 401) navigate('/sign-in', { replace: true })
+      else setError(cause instanceof ApiError ? cause.message : 'Unable to load the original file preview.')
+    })
+    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [document.id, fileId, attempt, navigate])
+  if (error) return <div role="alert" className="p-8"><p>{error}</p><button className="mt-4 underline" onClick={() => setAttempt(value => value + 1)}>Retry preview</button><p className="mt-3 text-sm text-stone-500">You can also use Download original above.</p></div>
+  if (!url) return <p role="status" className="p-10">Loading original file preview…</p>
+  return document.file_latest?.mimetype.split(';')[0].trim().toLowerCase() === 'application/pdf'
+    ? <iframe title="Document PDF preview" src={url} className="h-[75vh] min-h-96 w-full border-0" />
+    : <div className="max-h-[75vh] overflow-auto bg-stone-100 p-4"><img src={url} alt={document.label || 'Document preview'} className="mx-auto h-auto max-w-full" onError={() => setError('The browser could not display this image. Download the original to inspect it.')} /></div>
+}
+
 function FilePreview({ document }: { document: DocumentDetail }) {
+  const file = document.file_latest
+  const mime = file?.mimetype.split(';')[0].trim().toLowerCase()
+  const nativeTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif']
+  if (mime && nativeTypes.includes(mime) && file?.size != null && file.size <= 20 * 1024 * 1024) {
+    return <NativeFilePreview document={document} />
+  }
+  return <RenderedFilePreview document={document} />
+}
+
+function RenderedFilePreview({ document }: { document: DocumentDetail }) {
   const navigate = useNavigate()
   const [pages, setPages] = useState<PreviewPageList | null>(null)
   const [pageIndex, setPageIndex] = useState(0)
@@ -50,6 +88,7 @@ function FilePreview({ document }: { document: DocumentDetail }) {
 
   useEffect(() => {
     setUrl('')
+    setError('')
     if (!pages?.results[pageIndex]) return
     const controller = new AbortController()
     let objectUrl = ''
